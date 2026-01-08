@@ -19,41 +19,43 @@ interface Notification {
   read: boolean;
 }
 
+import { useEffect, useState, useCallback } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/services/api';
+import { useFocusEffect } from 'expo-router';
+
 export default function NotificationsScreen() {
-  const notifications: Notification[] = [
-    {
-      id: '1',
-      type: 'delivery',
-      title: 'New Delivery Request',
-      message: 'You have a new delivery request from Lagos to Abuja',
-      time: '10 minutes ago',
-      read: false,
-    },
-    {
-      id: '2',
-      type: 'success',
-      title: 'Delivery Completed',
-      message: 'Your delivery to Ibadan has been completed successfully',
-      time: '2 hours ago',
-      read: false,
-    },
-    {
-      id: '3',
-      type: 'info',
-      title: 'Payment Received',
-      message: '₦15,000 has been added to your wallet',
-      time: '1 day ago',
-      read: true,
-    },
-    {
-      id: '4',
-      type: 'warning',
-      title: 'Verification Pending',
-      message: 'Complete your identity verification to start receiving requests',
-      time: '2 days ago',
-      read: true,
-    },
-  ];
+  const { token } = useAuth();
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchNotifications = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await api.get('/notifications');
+      if (res.status === 'success') {
+        const mapped = (res.data || []).map((n: any) => ({
+          id: n.id,
+          type: n.type || 'info', // success, info, warning, delivery
+          title: n.title,
+          message: n.message,
+          time: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          read: n.is_read
+        }));
+        setNotifications(mapped);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchNotifications();
+    }, [fetchNotifications])
+  );
 
   const getIcon = (type: NotificationType) => {
     switch (type) {

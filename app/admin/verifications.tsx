@@ -1,44 +1,104 @@
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { ArrowLeft, User, CheckCircle, X } from 'lucide-react-native';
+import { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { ArrowLeft, User, CheckCircle, X, ExternalLink } from 'lucide-react-native';
 import StatusBadge from '@/components/StatusBadge';
 import { Colors } from '@/constants/Colors';
+import { api } from '@/services/api';
 
 export default function AdminVerificationsScreen() {
   const router = useRouter();
+  const [verifications, setVerifications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
-  const verifications = [
-    {
-      id: '1',
-      name: 'Adewale Ogunbiyi',
-      type: 'Identity Verification',
-      method: 'Live Photo Capture',
-      submittedAt: 'Jan 10, 2026 - 2:30 PM',
-      status: 'pending' as const,
-    },
-    {
-      id: '2',
-      name: 'TechHub Nigeria',
-      type: 'Business Verification',
-      method: 'CAC Documents',
-      submittedAt: 'Jan 9, 2026 - 10:15 AM',
-      status: 'pending' as const,
-    },
-    {
-      id: '3',
-      name: 'Sarah Okonkwo',
-      type: 'Identity Verification',
-      method: 'Live Video Recording',
-      submittedAt: 'Jan 8, 2026 - 3:45 PM',
-      status: 'completed' as const,
-    },
-  ];
+  const fetchVerifications = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/admin/pending');
+      if (res.status === 'success') {
+        setVerifications(res.data);
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to fetch verifications');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchVerifications();
+
+      const interval = setInterval(() => {
+        fetchVerifications();
+      }, 10000); // Poll every 10 seconds (reduced from 5)
+
+      return () => clearInterval(interval);
+    }, [fetchVerifications])
+  );
+
+  const handleApprove = async (id: string) => {
+    // Optimistic update
+    setProcessingIds(prev => new Set(prev).add(id));
+    setVerifications(prev => prev.map(v =>
+      v.id === id ? { ...v, status: 'approved' } : v
+    ));
+
+    try {
+      const res = await api.patch(`/admin/${id}/approve`, {});
+      if (res.status === 'success') {
+        Alert.alert('Success', 'Verification Approved ✓');
+        // Remove from list after short delay
+        setTimeout(() => {
+          setVerifications(prev => prev.filter(v => v.id !== id));
+        }, 1500);
+      }
+    } catch (error: any) {
+      // Revert optimistic update on error
+      Alert.alert('Error', error.message);
+      fetchVerifications();
+    } finally {
+      setProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    Alert.prompt('Reject Verification', 'Enter reason for rejection:', async (reason) => {
+      if (!reason) return;
+
+      // Optimistic update
+      setProcessingIds(prev => new Set(prev).add(id));
+      setVerifications(prev => prev.map(v =>
+        v.id === id ? { ...v, status: 'rejected' } : v
+      ));
+
+      try {
+        const res = await api.patch(`/admin/${id}/reject`, { reason });
+        if (res.status === 'success') {
+          Alert.alert('Success', 'Verification Rejected');
+          // Remove from list after short delay
+          setTimeout(() => {
+            setVerifications(prev => prev.filter(v => v.id !== id));
+          }, 1500);
+        }
+      } catch (error: any) {
+        // Revert optimistic update on error
+        Alert.alert('Error', error.message);
+        fetchVerifications();
+      } finally {
+        setProcessingIds(prev => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+    });
+  };
 
   return (
     <View style={styles.container}>
@@ -58,48 +118,74 @@ export default function AdminVerificationsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {verifications.map((verification) => (
-          <View key={verification.id} style={styles.verificationCard}>
-            <View style={styles.cardHeader}>
-              <View style={styles.userInfo}>
-                <View style={styles.avatar}>
-                  <User size={20} color={Colors.textLight} />
+        {loading ? (
+          <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 20 }} />
+        ) : verifications.length === 0 ? (
+          <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textSecondary }}>No pending verifications</Text>
+        ) : (
+          verifications.map((verification) => (
+            <View key={verification.id} style={styles.verificationCard}>
+              <View style={styles.cardHeader}>
+                <View style={styles.userInfo}>
+                  <View style={styles.avatar}>
+                    <User size={20} color={Colors.textLight} />
+                  </View>
+                  <View>
+                    <Text style={styles.name}>{verification.name}</Text>
+                    <Text style={styles.type}>{verification.type}</Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={styles.name}>{verification.name}</Text>
-                  <Text style={styles.type}>{verification.type}</Text>
+                <StatusBadge status={verification.status} />
+              </View>
+
+              <View style={styles.details}>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Method:</Text>
+                  <Text style={styles.detailValue}>{verification.method}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Submitted:</Text>
+                  <Text style={styles.detailValue}>
+                    {new Date(verification.submittedAt).toLocaleString()}
+                  </Text>
+                </View>
+                {/* Add links to view documents/videos if needed */}
+                <View style={styles.docsContainer}>
+                  <Text style={styles.docsTitle}>Documents:</Text>
+                  {verification.details?.id_document_url && <Text style={styles.docLink}>• ID Document</Text>}
+                  {verification.details?.live_video_url && <Text style={styles.docLink}>• Live Video</Text>}
                 </View>
               </View>
-              <StatusBadge status={verification.status} />
-            </View>
 
-            <View style={styles.details}>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Method:</Text>
-                <Text style={styles.detailValue}>{verification.method}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Submitted:</Text>
-                <Text style={styles.detailValue}>
-                  {verification.submittedAt}
-                </Text>
-              </View>
-            </View>
-
-            {verification.status === 'pending' && (
               <View style={styles.actions}>
-                <TouchableOpacity style={styles.approveButton}>
+                <TouchableOpacity
+                  style={[
+                    styles.approveButton,
+                    processingIds.has(verification.id) && styles.buttonDisabled
+                  ]}
+                  onPress={() => handleApprove(verification.id)}
+                  disabled={processingIds.has(verification.id)}
+                >
                   <CheckCircle size={18} color={Colors.textLight} />
-                  <Text style={styles.approveButtonText}>Approve</Text>
+                  <Text style={styles.approveButtonText}>
+                    {processingIds.has(verification.id) ? 'Processing...' : 'Approve'}
+                  </Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.rejectButton}>
+                <TouchableOpacity
+                  style={[
+                    styles.rejectButton,
+                    processingIds.has(verification.id) && styles.buttonDisabled
+                  ]}
+                  onPress={() => handleReject(verification.id)}
+                  disabled={processingIds.has(verification.id)}
+                >
                   <X size={18} color={Colors.error} />
                   <Text style={styles.rejectButtonText}>Reject</Text>
                 </TouchableOpacity>
               </View>
-            )}
-          </View>
-        ))}
+            </View>
+          ))
+        )}
       </ScrollView>
     </View>
   );
@@ -232,5 +318,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.error,
+  },
+  docsContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderColor: Colors.border,
+  },
+  docsTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    marginBottom: 4,
+  },
+  docLink: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: '500',
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
 });

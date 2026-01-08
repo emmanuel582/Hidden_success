@@ -4,8 +4,10 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
+  Alert
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
   ArrowLeft,
   MapPin,
@@ -16,48 +18,63 @@ import {
 } from 'lucide-react-native';
 import Button from '@/components/Button';
 import { Colors } from '@/constants/Colors';
+import { api } from '@/services/api';
+
+import { useState, useEffect } from 'react';
 
 export default function SearchTravelersScreen() {
   const router = useRouter();
+  const { requestId, origin, destination, date, space } = useLocalSearchParams();
 
-  const travelers = [
-    {
-      id: '1',
-      name: 'John Adebayo',
-      rating: 4.8,
-      trips: 45,
-      from: 'Lagos',
-      to: 'Abuja',
-      date: 'Jan 15, 2026',
-      time: '9:00 AM',
-      space: 'Medium',
-      verified: true,
-    },
-    {
-      id: '2',
-      name: 'Sarah Okonkwo',
-      rating: 4.9,
-      trips: 62,
-      from: 'Lagos',
-      to: 'Abuja',
-      date: 'Jan 15, 2026',
-      time: '2:00 PM',
-      space: 'Large',
-      verified: true,
-    },
-    {
-      id: '3',
-      name: 'Ahmed Ibrahim',
-      rating: 4.7,
-      trips: 38,
-      from: 'Lagos',
-      to: 'Abuja',
-      date: 'Jan 16, 2026',
-      time: '8:00 AM',
-      space: 'Small',
-      verified: true,
-    },
-  ];
+  const [travelers, setTravelers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchTravelers();
+  }, [origin, destination, date, space]);
+
+  const fetchTravelers = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/trips/search', {
+        origin: origin,
+        destination: destination,
+        date: date,
+        space: space
+      });
+      if (res.status === 'success') {
+        setTravelers(res.data);
+      }
+    } catch (error) {
+      console.log('Search Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendRequest = async (tripId: string) => {
+    const rid = typeof requestId === 'string' ? requestId : Array.isArray(requestId) ? requestId[0] : '';
+    if (!rid) {
+      Alert.alert('Error', 'No active delivery request found to match.');
+      return;
+    }
+
+    try {
+      const res = await api.post('/matches/request', {
+        tripId: tripId,
+        requestId: rid
+      });
+
+      if (res.status === 'success') {
+        Alert.alert('Success', 'Match request sent to traveler!');
+        router.push('/business/request-sent');
+      } else {
+        Alert.alert('Error', res.message || 'Failed to send request');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'An error occurred');
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -77,11 +94,11 @@ export default function SearchTravelersScreen() {
       <View style={styles.routeInfo}>
         <View style={styles.routeRow}>
           <MapPin size={16} color={Colors.secondary} />
-          <Text style={styles.routeText}>Lagos → Abuja</Text>
+          <Text style={styles.routeText}>{origin || 'Anywhere'} → {destination || 'Anywhere'}</Text>
         </View>
         <View style={styles.dateRow}>
           <Calendar size={14} color={Colors.textSecondary} />
-          <Text style={styles.dateText}>Jan 15, 2026</Text>
+          <Text style={styles.dateText}>{date || 'Any Date'}</Text>
         </View>
       </View>
 
@@ -90,71 +107,96 @@ export default function SearchTravelersScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <Text style={styles.resultsText}>
-          {travelers.length} travelers found
-        </Text>
+        {loading ? (
+          <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 50 }} />
+        ) : travelers.length === 0 ? (
+          <View style={{ alignItems: 'center', marginTop: 50 }}>
+            <Text style={{ color: Colors.textSecondary }}>No travelers found matching your criteria.</Text>
+          </View>
+        ) : (
+          <>
+            <Text style={styles.resultsText}>
+              {travelers.length} traveler{travelers.length !== 1 ? 's' : ''} found
+            </Text>
 
-        {travelers.map((traveler) => (
-          <View key={traveler.id} style={styles.travelerCard}>
-            <View style={styles.travelerHeader}>
-              <View style={styles.travelerLeft}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {traveler.name
-                      .split(' ')
-                      .map((n) => n[0])
-                      .join('')}
-                  </Text>
-                </View>
-                <View style={styles.travelerInfo}>
-                  <View style={styles.nameRow}>
-                    <Text style={styles.travelerName}>{traveler.name}</Text>
-                    {traveler.verified && (
-                      <CheckCircle size={16} color={Colors.primary} />
-                    )}
+            {travelers.map((trip) => (
+              <View key={trip.id} style={styles.travelerCard}>
+                {trip.relevanceScore && (
+                  <View style={styles.relevanceBadge}>
+                    <Text style={styles.relevanceText}>{trip.relevanceScore}% Match</Text>
                   </View>
-                  <View style={styles.ratingRow}>
-                    <Star
-                      size={14}
-                      color={Colors.warning}
-                      fill={Colors.warning}
-                    />
-                    <Text style={styles.rating}>{traveler.rating}</Text>
-                    <Text style={styles.trips}>
-                      ({traveler.trips} trips)
+                )}
+
+                <View style={styles.travelerHeader}>
+                  <View style={styles.travelerLeft}>
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarText}>
+                        {trip.users?.full_name
+                          ? trip.users.full_name.split(' ').map((n: any) => n[0]).join('')
+                          : 'U'}
+                      </Text>
+                    </View>
+                    <View style={styles.travelerInfo}>
+                      <View style={styles.nameRow}>
+                        <Text style={styles.travelerName}>{trip.users?.full_name || 'User'}</Text>
+                        {trip.users?.is_verified && (
+                          <CheckCircle size={16} color={Colors.primary} />
+                        )}
+                      </View>
+                      <View style={styles.ratingRow}>
+                        <Star
+                          size={14}
+                          color={Colors.warning}
+                          fill={Colors.warning}
+                        />
+                        <Text style={styles.rating}>4.5</Text>
+                        <Text style={styles.trips}>
+                          (12 trips)
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                {trip.matchReasons && trip.matchReasons.length > 0 && (
+                  <View style={styles.matchReasons}>
+                    {trip.matchReasons.map((reason: string, idx: number) => (
+                      <View key={idx} style={styles.reasonChip}>
+                        <Text style={styles.reasonText}>✓ {reason}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                <View style={styles.tripDetails}>
+                  <View style={styles.tripRow}>
+                    <MapPin size={16} color={Colors.textSecondary} />
+                    <Text style={styles.tripText}>
+                      {trip.origin} → {trip.destination}
+                    </Text>
+                  </View>
+                  <View style={styles.tripRow}>
+                    <Calendar size={16} color={Colors.textSecondary} />
+                    <Text style={styles.tripText}>
+                      {trip.departure_date} at {trip.departure_time || 'anytime'}
                     </Text>
                   </View>
                 </View>
-              </View>
-            </View>
 
-            <View style={styles.tripDetails}>
-              <View style={styles.tripRow}>
-                <MapPin size={16} color={Colors.textSecondary} />
-                <Text style={styles.tripText}>
-                  {traveler.from} → {traveler.to}
-                </Text>
-              </View>
-              <View style={styles.tripRow}>
-                <Calendar size={16} color={Colors.textSecondary} />
-                <Text style={styles.tripText}>
-                  {traveler.date} at {traveler.time}
-                </Text>
-              </View>
-            </View>
+                <View style={styles.spaceInfo}>
+                  <Text style={styles.spaceLabel}>Available Space:</Text>
+                  <Text style={styles.spaceValue}>{trip.available_space}</Text>
+                </View>
 
-            <View style={styles.spaceInfo}>
-              <Text style={styles.spaceLabel}>Available Space:</Text>
-              <Text style={styles.spaceValue}>{traveler.space}</Text>
-            </View>
-
-            <Button
-              title="Send Request"
-              onPress={() => router.push('/business/request-sent')}
-              variant="secondary"
-            />
-          </View>
-        ))}
+                <Button
+                  title="Send Request"
+                  onPress={() => handleSendRequest(trip.id)}
+                  variant="secondary"
+                />
+              </View>
+            ))}
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -314,5 +356,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.text,
+  },
+  relevanceBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    zIndex: 1,
+  },
+  relevanceText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textLight,
+  },
+  matchReasons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  reasonChip: {
+    backgroundColor: Colors.primary + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  reasonText: {
+    fontSize: 11,
+    color: Colors.primary,
+    fontWeight: '500',
   },
 });

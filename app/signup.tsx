@@ -5,12 +5,15 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import Input from '@/components/Input';
 import Button from '@/components/Button';
+import StatusMessage from '@/components/StatusMessage';
 import { Colors } from '@/constants/Colors';
+import { api } from '@/services/api';
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -19,9 +22,72 @@ export default function SignUpScreen() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [statusType, setStatusType] = useState<'info' | 'success' | 'error' | 'warning'>('info');
+  const [showStatus, setShowStatus] = useState(false);
 
-  const handleSignUp = () => {
-    router.push('/otp');
+  const showStatusMessage = (message: string, type: 'info' | 'success' | 'error' | 'warning') => {
+    setStatusMessage(message);
+    setStatusType(type);
+    setShowStatus(true);
+  };
+
+  const handleSignUp = async () => {
+    // Validation
+    if (!name || !email || !password || !phone) {
+      showStatusMessage('Please fill in all fields to continue', 'warning');
+      return;
+    }
+
+    if (password.length < 6) {
+      showStatusMessage('Password must be at least 6 characters long', 'warning');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      showStatusMessage('Passwords do not match', 'error');
+      return;
+    }
+
+    setLoading(true);
+    showStatusMessage('Creating your account...', 'info');
+
+    try {
+      const response = await api.post('/auth/register', {
+        full_name: name,
+        email,
+        phone_number: phone,
+        password
+      });
+
+      if (response.status === 'success') {
+        showStatusMessage('Account created! Sending verification code...', 'success');
+
+        setTimeout(() => {
+          router.push({ pathname: '/otp', params: { email } });
+        }, 1500);
+      } else {
+        showStatusMessage(response.message || 'Unable to create account', 'error');
+      }
+    } catch (error: any) {
+      // Provide specific error messages
+      let errorMessage = 'Something went wrong. Please try again.';
+
+      if (error.message.includes('already') || error.message.includes('exists')) {
+        errorMessage = 'Account already exists. Please sign in instead.';
+      } else if (error.message.includes('invalid') && error.message.includes('email')) {
+        errorMessage = 'Invalid email address. Please use a valid email.';
+      } else if (error.message.includes('network') || error.message.includes('Network')) {
+        errorMessage = 'Network error. Check your connection';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      showStatusMessage(errorMessage, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -36,6 +102,13 @@ export default function SignUpScreen() {
         <Text style={styles.headerTitle}>Create Account</Text>
         <View style={styles.placeholder} />
       </View>
+
+      <StatusMessage
+        message={statusMessage}
+        type={statusType}
+        visible={showStatus}
+        onHide={() => setShowStatus(false)}
+      />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Join MOVEVER</Text>
@@ -80,9 +153,10 @@ export default function SignUpScreen() {
           />
 
           <Button
-            title="Create Account"
+            title={loading ? "Creating your account..." : "Create Account"}
             onPress={handleSignUp}
             style={styles.button}
+            disabled={loading}
           />
 
           <View style={styles.loginContainer}>

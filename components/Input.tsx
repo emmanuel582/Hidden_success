@@ -11,6 +11,7 @@ interface InputProps {
   multiline?: boolean;
   numberOfLines?: number;
   style?: ViewStyle;
+  inputStyle?: any; // TextStyle
 }
 
 export default function Input({
@@ -23,12 +24,13 @@ export default function Input({
   multiline = false,
   numberOfLines = 1,
   style,
+  inputStyle,
 }: InputProps) {
   return (
     <View style={[styles.container, style]}>
       {label && <Text style={styles.label}>{label}</Text>}
       <TextInput
-        style={[styles.input, multiline && styles.multiline]}
+        style={[styles.input, multiline && styles.multiline, inputStyle]}
         placeholder={placeholder}
         placeholderTextColor={Colors.textSecondary}
         value={value}

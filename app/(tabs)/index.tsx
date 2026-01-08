@@ -4,6 +4,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -20,59 +22,93 @@ import StatusBadge from '@/components/StatusBadge';
 import EmptyState from '@/components/EmptyState';
 import { Colors } from '@/constants/Colors';
 
+import { useEffect, useState, useCallback } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/services/api';
+import { useFocusEffect } from 'expo-router';
+
+// ... imports
+
 export default function DashboardScreen() {
-  const { mode } = useMode();
+  const { mode, setMode } = useMode();
+  const { user, checkVerificationStatus, token } = useAuth();
   const router = useRouter();
 
-  const travelerTrips = [
-    {
-      id: '1',
-      from: 'Lagos',
-      to: 'Abuja',
-      date: 'Jan 15, 2026',
-      requests: 3,
-      status: 'active' as const,
-    },
-    {
-      id: '2',
-      from: 'Port Harcourt',
-      to: 'Enugu',
-      date: 'Jan 20, 2026',
-      requests: 0,
-      status: 'pending' as const,
-    },
-  ];
+  // Poll for verification status changes if user is not verified
+  useFocusEffect(
+    useCallback(() => {
+      if (user && !user.is_verified) {
+        // Initial check
+        checkVerificationStatus();
 
-  const businessDeliveries = [
-    {
-      id: '1',
-      from: 'Lagos',
-      to: 'Abuja',
-      traveler: 'John Adebayo',
-      date: 'Jan 15, 2026',
-      status: 'active' as const,
-    },
-    {
-      id: '2',
-      from: 'Ibadan',
-      to: 'Kaduna',
-      traveler: 'Sarah Okonkwo',
-      date: 'Jan 18, 2026',
-      status: 'pending' as const,
-    },
-  ];
+        const interval = setInterval(() => {
+          console.log('[Dashboard] Checking verification status...');
+          checkVerificationStatus();
+        }, 10000); // Reduced from 5 to 10 seconds
+        return () => clearInterval(interval);
+      }
+    }, [user?.is_verified, checkVerificationStatus])
+  );
+
+  const [travelerTrips, setTravelerTrips] = useState<any[]>([]);
+  const [businessDeliveries, setBusinessDeliveries] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const [userStats, setUserStats] = useState<any>(null);
+
+  const fetchData = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      // Fetch Stats
+      const statsRes = await api.get('/users/stats');
+      if (statsRes.status === 'success') {
+        setUserStats(statsRes.data);
+      }
+
+      if (mode === 'traveler') {
+        const res = await api.get('/trips');
+        if (res.status === 'success') {
+          setTravelerTrips(res.data);
+        }
+      } else {
+        const res = await api.get('/delivery-requests');
+        if (res.status === 'success') {
+          setBusinessDeliveries(res.data);
+        }
+      }
+    } catch (error) {
+      console.error('Fetch Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [mode, token]);
+
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+
+      // Global Live Updates: Poll every 10 seconds for new trips/deliveries
+      const interval = setInterval(() => {
+        fetchData();
+      }, 10000);
+
+      return () => clearInterval(interval);
+    }, [fetchData])
+  );
 
   const renderTravelerDashboard = () => (
     <>
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
           <TrendingUp size={24} color={Colors.primary} />
-          <Text style={styles.statValue}>₦45,000</Text>
+          <Text style={styles.statValue}>₦{userStats?.wallet?.total_earned || '0'}</Text>
           <Text style={styles.statLabel}>Total Earnings</Text>
         </View>
         <View style={styles.statCard}>
           <Plane size={24} color={Colors.secondary} />
-          <Text style={styles.statValue}>12</Text>
+          <Text style={styles.statValue}>{userStats?.counts?.completedTrips || '0'}</Text>
           <Text style={styles.statLabel}>Completed Trips</Text>
         </View>
       </View>
@@ -101,7 +137,7 @@ export default function DashboardScreen() {
               <View style={styles.routeContainer}>
                 <MapPin size={16} color={Colors.primary} />
                 <Text style={styles.route}>
-                  {trip.from} → {trip.to}
+                  {trip.origin} → {trip.destination}
                 </Text>
               </View>
               <StatusBadge status={trip.status} />
@@ -109,10 +145,10 @@ export default function DashboardScreen() {
             <View style={styles.tripInfo}>
               <View style={styles.infoRow}>
                 <Calendar size={16} color={Colors.textSecondary} />
-                <Text style={styles.infoText}>{trip.date}</Text>
+                <Text style={styles.infoText}>{new Date(trip.departure_date).toLocaleDateString()}</Text>
               </View>
               <Text style={styles.requests}>
-                {trip.requests} delivery request{trip.requests !== 1 ? 's' : ''}
+                {trip.request_count || 0} delivery request{trip.request_count !== 1 ? 's' : ''}
               </Text>
             </View>
           </TouchableOpacity>
@@ -126,12 +162,12 @@ export default function DashboardScreen() {
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
           <Package size={24} color={Colors.secondary} />
-          <Text style={styles.statValue}>8</Text>
+          <Text style={styles.statValue}>{userStats?.counts?.activeDeliveries || '0'}</Text>
           <Text style={styles.statLabel}>Active Deliveries</Text>
         </View>
         <View style={styles.statCard}>
           <TrendingUp size={24} color={Colors.primary} />
-          <Text style={styles.statValue}>₦28,500</Text>
+          <Text style={styles.statValue}>₦{userStats?.counts?.totalSpent || '0'}</Text>
           <Text style={styles.statLabel}>Total Spent</Text>
         </View>
       </View>
@@ -162,7 +198,7 @@ export default function DashboardScreen() {
               <View style={styles.routeContainer}>
                 <MapPin size={16} color={Colors.secondary} />
                 <Text style={styles.route}>
-                  {delivery.from} → {delivery.to}
+                  {delivery.origin} → {delivery.destination}
                 </Text>
               </View>
               <StatusBadge status={delivery.status} />
@@ -170,10 +206,10 @@ export default function DashboardScreen() {
             <View style={styles.tripInfo}>
               <View style={styles.infoRow}>
                 <Calendar size={16} color={Colors.textSecondary} />
-                <Text style={styles.infoText}>{delivery.date}</Text>
+                <Text style={styles.infoText}>{new Date(delivery.delivery_date).toLocaleDateString()}</Text>
               </View>
               <Text style={styles.travelerText}>
-                Traveler: {delivery.traveler}
+                Traveler: {delivery.traveler_name || 'Pending Match'}
               </Text>
             </View>
           </TouchableOpacity>
@@ -187,14 +223,40 @@ export default function DashboardScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Welcome back</Text>
-          <Text style={styles.name}>Chinedu Okafor</Text>
+          <Text style={styles.name}>{user?.full_name || 'User'}</Text>
         </View>
         <TouchableOpacity onPress={() => router.push('/settings')}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>CO</Text>
+            <Text style={styles.avatarText}>{user?.full_name?.substring(0, 2).toUpperCase() || 'UR'}</Text>
           </View>
         </TouchableOpacity>
       </View>
+
+      {!user?.is_verified && (
+        <View style={styles.verificationBanner}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.verificationText}>
+              {user?.verification_status === 'pending'
+                ? '⏳ Verification Pending Approval'
+                : '⚠️ Account Unverified'}
+            </Text>
+            {user?.verification_status === 'pending' && (
+              <Text style={styles.verificationSubtext}>
+                We're reviewing your documents
+              </Text>
+            )}
+          </View>
+          {user?.verification_status !== 'pending' ? (
+            <TouchableOpacity onPress={() => router.push('/verify/identity')}>
+              <Text style={styles.verifyLink}>Verify Now</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={checkVerificationStatus}>
+              <Text style={styles.refreshLink}>Refresh</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       <ScrollView
         style={styles.content}
@@ -213,15 +275,20 @@ export default function DashboardScreen() {
           {
             backgroundColor:
               mode === 'traveler' ? Colors.primary : Colors.secondary,
+            opacity: user?.is_verified ? 1 : 0.5,
           },
         ]}
-        onPress={() =>
+        onPress={() => {
+          if (!user?.is_verified) {
+            Alert.alert("Action Blocked", "Your account verification is pending approval.");
+            return;
+          }
           router.push(
             mode === 'traveler'
               ? '/traveler/post-trip'
               : '/business/post-delivery'
-          )
-        }
+          );
+        }}
       >
         <Plus size={24} color={Colors.textLight} />
       </TouchableOpacity>
@@ -372,5 +439,35 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+  },
+  verificationBanner: {
+    backgroundColor: '#FFF3E0',
+    padding: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FFE0B2',
+  },
+  verificationText: {
+    color: Colors.warning,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  verificationSubtext: {
+    color: Colors.warning,
+    fontSize: 12,
+    marginTop: 2,
+    opacity: 0.8,
+  },
+  verifyLink: {
+    color: Colors.primary,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
+  refreshLink: {
+    color: Colors.primary,
+    fontWeight: '600',
+    fontSize: 13,
   },
 });

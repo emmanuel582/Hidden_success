@@ -5,7 +5,9 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
+import { api } from '@/services/api';
 import { ArrowLeft, Search, Filter, CheckCircle, Ban } from 'lucide-react-native';
 import StatusBadge from '@/components/StatusBadge';
 import { Colors } from '@/constants/Colors';
@@ -13,38 +15,35 @@ import { Colors } from '@/constants/Colors';
 export default function AdminUsersScreen() {
   const router = useRouter();
 
-  const users = [
-    {
-      id: '1',
-      name: 'Chinedu Okafor',
-      email: 'chinedu@email.com',
-      type: 'Traveler',
-      verified: true,
-      trips: 12,
-      rating: 4.8,
-      status: 'active' as const,
-    },
-    {
-      id: '2',
-      name: 'TechHub Nigeria',
-      email: 'info@techhub.ng',
-      type: 'Business',
-      verified: true,
-      deliveries: 8,
-      rating: 4.9,
-      status: 'active' as const,
-    },
-    {
-      id: '3',
-      name: 'Sarah Okonkwo',
-      email: 'sarah@email.com',
-      type: 'Traveler',
-      verified: false,
-      trips: 0,
-      rating: 0,
-      status: 'pending' as const,
-    },
-  ];
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const res = await api.get('/admin/users');
+      if (res.status === 'success') {
+        const mapped = (res.data || []).map((u: any) => ({
+          id: u.id,
+          name: u.full_name || 'Unknown',
+          email: u.email,
+          type: u.user_type === 'business' ? 'Business' : 'Traveler',
+          verified: u.is_verified,
+          trips: 0, // Need to join trips count in query in future
+          rating: 0, // Need ratings
+          status: 'active' // Determine from auth or suspension status
+        }));
+        setUsers(mapped);
+      }
+    } catch (error) {
+      console.log('Error fetching users:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>

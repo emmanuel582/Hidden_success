@@ -12,23 +12,67 @@ import Input from '@/components/Input';
 import Button from '@/components/Button';
 import { Colors } from '@/constants/Colors';
 
+import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/services/api';
+import { Alert } from 'react-native';
+
 export default function PostDeliveryScreen() {
   const router = useRouter();
+  const { token } = useAuth();
   const [fromLocation, setFromLocation] = useState('');
   const [toLocation, setToLocation] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [selectedSize, setSelectedSize] = useState<string>('');
   const [description, setDescription] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const sizeOptions = [
-    { id: 'small', label: 'Small', description: 'Up to 5kg', price: '₦5,000' },
-    { id: 'medium', label: 'Medium', description: 'Up to 15kg', price: '₦10,000' },
-    { id: 'large', label: 'Large', description: 'Up to 30kg', price: '₦18,000' },
+    { id: 'small', label: 'Small', description: 'Up to 5kg', price: '₦5,000', numericPrice: 5000 },
+    { id: 'medium', label: 'Medium', description: 'Up to 15kg', price: '₦10,000', numericPrice: 10000 },
+    { id: 'large', label: 'Large', description: 'Up to 30kg', price: '₦18,000', numericPrice: 18000 },
   ];
 
-  const handlePostDelivery = () => {
-    router.push('/business/search-travelers');
+  const handlePostDelivery = async () => {
+    if (!fromLocation || !toLocation || !date || !selectedSize) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const selectedOption = sizeOptions.find(o => o.id === selectedSize);
+      const res = await api.post('/deliveries', {
+        origin: fromLocation,
+        destination: toLocation,
+        delivery_date: date,
+        delivery_time: time,
+        package_size: selectedSize,
+        item_description: description,
+        estimated_cost: selectedOption?.numericPrice || 0
+      });
+
+      if (res.status === 'success') {
+        const requestId = res.data.id;
+        Alert.alert('Success', 'Delivery request posted successfully!');
+        router.push({
+          pathname: '/business/search-travelers',
+          params: {
+            requestId: requestId,
+            origin: fromLocation,
+            destination: toLocation,
+            date: date,
+            space: selectedSize
+          }
+        });
+      } else {
+        Alert.alert('Error', res.message || 'Failed to post delivery request');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const estimatedCost = sizeOptions.find((opt) => opt.id === selectedSize)
@@ -162,7 +206,7 @@ export default function PostDeliveryScreen() {
             </View>
           )}
 
-          <Button title="Find Travelers" onPress={handlePostDelivery} />
+          <Button title="Find Travelers" onPress={handlePostDelivery} loading={loading} />
         </View>
       </ScrollView>
     </View>

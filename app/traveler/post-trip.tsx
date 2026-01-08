@@ -12,14 +12,20 @@ import Input from '@/components/Input';
 import Button from '@/components/Button';
 import { Colors } from '@/constants/Colors';
 
+import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/services/api';
+import { Alert } from 'react-native';
+
 export default function PostTripScreen() {
   const router = useRouter();
+  const { token } = useAuth();
   const [fromLocation, setFromLocation] = useState('');
   const [toLocation, setToLocation] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [selectedSpace, setSelectedSpace] = useState<string>('');
   const [description, setDescription] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const spaceOptions = [
     { id: 'small', label: 'Small', description: 'Up to 5kg' },
@@ -27,8 +33,34 @@ export default function PostTripScreen() {
     { id: 'large', label: 'Large', description: 'Up to 30kg' },
   ];
 
-  const handlePostTrip = () => {
-    router.back();
+  const handlePostTrip = async () => {
+    if (!fromLocation || !toLocation || !date || !selectedSpace) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await api.post('/trips', {
+        origin: fromLocation,
+        destination: toLocation,
+        departure_date: date,
+        departure_time: time,
+        available_space: selectedSpace,
+        description: description,
+      });
+
+      if (res.status === 'success') {
+        Alert.alert('Success', 'Trip posted successfully!');
+        router.replace('/(tabs)');
+      } else {
+        Alert.alert('Error', res.message || 'Failed to post trip');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -144,7 +176,7 @@ export default function PostTripScreen() {
             </Text>
           </View>
 
-          <Button title="Post Trip" onPress={handlePostTrip} />
+          <Button title="Post Trip" onPress={handlePostTrip} loading={loading} />
         </View>
       </ScrollView>
     </View>

@@ -17,9 +17,39 @@ import {
 import { useMode } from '@/contexts/ModeContext';
 import { Colors } from '@/constants/Colors';
 
+import { useEffect, useState, useCallback } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/services/api';
+import { useFocusEffect } from 'expo-router';
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { mode } = useMode();
+  const { user, token } = useAuth();
+  const [userStats, setUserStats] = useState<any>(null);
+
+  const fetchStats = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await api.get('/users/stats');
+      if (res.status === 'success') setUserStats(res.data);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [token]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchStats();
+    }, [fetchStats])
+  );
+
+  const getMonthsSinceJoin = () => {
+    if (!user?.created_at) return 0;
+    const start = new Date(user.created_at);
+    const now = new Date();
+    return (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+  };
 
   const menuItems = [
     {
@@ -57,25 +87,29 @@ export default function ProfileScreen() {
       >
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>CO</Text>
+            <Text style={styles.avatarText}>
+              {user?.full_name?.substring(0, 2).toUpperCase() || 'UR'}
+            </Text>
           </View>
-          <Text style={styles.name}>Chinedu Okafor</Text>
-          <Text style={styles.email}>chinedu.okafor@email.com</Text>
+          <Text style={styles.name}>{user?.full_name || 'User'}</Text>
+          <Text style={styles.email}>{user?.email || 'No Email'}</Text>
           <View style={styles.ratingContainer}>
             <Star size={16} color={Colors.warning} fill={Colors.warning} />
-            <Text style={styles.rating}>4.8</Text>
-            <Text style={styles.ratingCount}>(127 ratings)</Text>
+            <Text style={styles.rating}>{userStats?.rating?.average || '0.0'}</Text>
+            <Text style={styles.ratingCount}>({userStats?.rating?.count || 0} ratings)</Text>
           </View>
-          <View style={styles.verificationBadge}>
-            <Shield size={16} color={Colors.primary} />
-            <Text style={styles.verificationText}>Verified User</Text>
+          <View style={[styles.verificationBadge, { backgroundColor: user?.is_verified ? Colors.primary + '20' : '#ffebee' }]}>
+            <Shield size={16} color={user?.is_verified ? Colors.primary : Colors.error} />
+            <Text style={[styles.verificationText, { color: user?.is_verified ? Colors.primary : Colors.error }]}>
+              {user?.is_verified ? 'Verified User' : 'Unverified'}
+            </Text>
           </View>
         </View>
 
         <View style={styles.statsContainer}>
           <View style={styles.statItem}>
             <Text style={styles.statValue}>
-              {mode === 'traveler' ? '12' : '8'}
+              {mode === 'traveler' ? (userStats?.counts?.completedTrips || '0') : (userStats?.counts?.activeDeliveries || '0')}
             </Text>
             <Text style={styles.statLabel}>
               {mode === 'traveler' ? 'Trips' : 'Deliveries'}
@@ -84,7 +118,7 @@ export default function ProfileScreen() {
           <View style={styles.divider} />
           <View style={styles.statItem}>
             <Text style={styles.statValue}>
-              {mode === 'traveler' ? '₦45,000' : '₦28,500'}
+              {mode === 'traveler' ? `₦${userStats?.wallet?.total_earned || 0}` : `₦${userStats?.counts?.totalSpent || 0}`}
             </Text>
             <Text style={styles.statLabel}>
               {mode === 'traveler' ? 'Earned' : 'Spent'}
@@ -92,7 +126,7 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.divider} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>6</Text>
+            <Text style={styles.statValue}>{getMonthsSinceJoin()}</Text>
             <Text style={styles.statLabel}>Months</Text>
           </View>
         </View>

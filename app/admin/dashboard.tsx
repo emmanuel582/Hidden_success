@@ -4,8 +4,11 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator
 } from 'react-native';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
+import { api } from '@/services/api';
 import {
   ArrowLeft,
   Users,
@@ -21,90 +24,102 @@ import { Colors } from '@/constants/Colors';
 export default function AdminDashboardScreen() {
   const router = useRouter();
 
-  const stats = [
-    {
-      icon: Users,
-      label: 'Total Users',
-      value: '1,247',
-      change: '+12%',
-      color: Colors.primary,
-    },
-    {
-      icon: Truck,
-      label: 'Active Trips',
-      value: '89',
-      change: '+5%',
-      color: Colors.secondary,
-    },
-    {
-      icon: Package,
-      label: 'Deliveries',
-      value: '456',
-      change: '+18%',
-      color: Colors.primary,
-    },
-    {
-      icon: DollarSign,
-      label: 'Revenue',
-      value: '₦2.4M',
-      change: '+24%',
-      color: Colors.success,
-    },
-  ];
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  const fetchStats = async () => {
+    try {
+      const res = await api.get('/admin/stats');
+      if (res.status === 'success') {
+        setDashboardData(res.data);
+      }
+    } catch (error) {
+      console.log('Stats error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStatsArray = () => {
+    const d = dashboardData?.stats || {};
+    return [
+      {
+        icon: Users,
+        label: 'Total Users',
+        value: d.totalUsers?.toString() || '0',
+        change: '0%', // Calculate if historical data exists
+        color: Colors.primary,
+      },
+      {
+        icon: Truck,
+        label: 'Active Trips',
+        value: d.activeTrips?.toString() || '0',
+        change: '0%',
+        color: Colors.secondary,
+      },
+      {
+        icon: Package,
+        label: 'Deliveries',
+        value: d.deliveries?.toString() || '0',
+        change: '0%',
+        color: Colors.primary,
+      },
+      {
+        icon: DollarSign,
+        label: 'Revenue',
+        value: `₦${d.revenue || 0}`,
+        change: '0%',
+        color: Colors.success,
+      },
+    ];
+  };
+
+  const getRecentActivity = () => {
+    return dashboardData?.activity || [];
+  };
+
+  const stats = getStatsArray();
+  // Quick Actions remain static unless we want to hide them permissions
   const quickActions = [
     {
       icon: Users,
       label: 'Users',
-      count: '1,247',
+      count: dashboardData?.stats?.totalUsers || '0',
       route: '/admin/users',
     },
     {
       icon: Truck,
       label: 'Trips',
-      count: '89',
+      count: dashboardData?.stats?.activeTrips || '0',
       route: '/admin/trips',
     },
     {
       icon: Shield,
       label: 'Verifications',
-      count: '23',
+      count: dashboardData?.stats?.pendingVerifications || '0',
       route: '/admin/verifications',
     },
     {
       icon: AlertCircle,
       label: 'Disputes',
-      count: '7',
+      count: '0',
       route: '/admin/disputes',
     },
   ];
 
-  const recentActivity = [
-    {
-      id: '1',
-      type: 'user',
-      message: 'New user registration: Adewale Ogunbiyi',
-      time: '5 mins ago',
-    },
-    {
-      id: '2',
-      type: 'trip',
-      message: 'New trip posted: Lagos to Abuja',
-      time: '12 mins ago',
-    },
-    {
-      id: '3',
-      type: 'verification',
-      message: 'Verification pending: TechHub Nigeria',
-      time: '30 mins ago',
-    },
-    {
-      id: '4',
-      type: 'dispute',
-      message: 'New dispute reported for delivery #12345',
-      time: '1 hour ago',
-    },
-  ];
+  const recentActivity = getRecentActivity();
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -161,7 +176,7 @@ export default function AdminDashboardScreen() {
 
         <Text style={styles.sectionTitle}>Recent Activity</Text>
         <View style={styles.activityList}>
-          {recentActivity.map((activity) => (
+          {recentActivity.map((activity: any) => (
             <View key={activity.id} style={styles.activityItem}>
               <View style={styles.activityDot} />
               <View style={styles.activityContent}>

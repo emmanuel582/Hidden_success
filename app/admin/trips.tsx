@@ -10,38 +10,39 @@ import { ArrowLeft, MapPin, Calendar, Package } from 'lucide-react-native';
 import StatusBadge from '@/components/StatusBadge';
 import { Colors } from '@/constants/Colors';
 
+import { useState, useEffect } from 'react';
+import { api } from '@/services/api';
+
 export default function AdminTripsScreen() {
   const router = useRouter();
+  const [trips, setTrips] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const trips = [
-    {
-      id: '1',
-      traveler: 'Chinedu Okafor',
-      from: 'Lagos',
-      to: 'Abuja',
-      date: 'Jan 15, 2026',
-      requests: 3,
-      status: 'active' as const,
-    },
-    {
-      id: '2',
-      traveler: 'Sarah Okonkwo',
-      from: 'Port Harcourt',
-      to: 'Enugu',
-      date: 'Jan 20, 2026',
-      requests: 1,
-      status: 'pending' as const,
-    },
-    {
-      id: '3',
-      traveler: 'Ahmed Ibrahim',
-      from: 'Kano',
-      to: 'Lagos',
-      date: 'Jan 8, 2026',
-      requests: 2,
-      status: 'completed' as const,
-    },
-  ];
+  useEffect(() => {
+    fetchTrips();
+  }, []);
+
+  const fetchTrips = async () => {
+    try {
+      const res = await api.get('/admin/trips');
+      if (res.status === 'success') {
+        const mapped = (res.data || []).map((t: any) => ({
+          id: t.id.substring(0, 8), // Short ID
+          traveler: t.users?.full_name || 'Unknown',
+          from: t.origin,
+          to: t.destination,
+          date: new Date(t.departure_date).toLocaleDateString(),
+          requests: 0, // Join with requests count later
+          status: t.status
+        }));
+        setTrips(mapped);
+      }
+    } catch (error) {
+      console.log('Error fetching trips:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>

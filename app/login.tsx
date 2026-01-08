@@ -5,20 +5,107 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import Input from '@/components/Input';
 import Button from '@/components/Button';
+import StatusMessage from '@/components/StatusMessage';
 import { Colors } from '@/constants/Colors';
+import { api } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [statusType, setStatusType] = useState<'info' | 'success' | 'error' | 'warning'>('info');
+  const [showStatus, setShowStatus] = useState(false);
 
-  const handleLogin = () => {
-    router.push('/(tabs)');
+  const showStatusMessage = (message: string, type: 'info' | 'success' | 'error' | 'warning') => {
+    setStatusMessage(message);
+    setStatusType(type);
+    setShowStatus(true);
+  };
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      showStatusMessage('Please fill in all fields to continue', 'warning');
+      return;
+    }
+
+    setLoading(true);
+    showStatusMessage('Verifying credentials...', 'info');
+
+    try {
+      const response = await api.post('/auth/login', { email, password });
+
+      // Backend returns { status: 'success', data: { session, user } }
+      if (response.status === 'success') {
+        showStatusMessage('Welcome back! Signing you in...', 'success');
+
+        setTimeout(() => {
+          signIn(response.data.session.access_token, response.data.user);
+          router.replace('/(tabs)');
+        }, 1000);
+      } else {
+        showStatusMessage(response.message || 'Invalid credentials', 'error');
+      }
+    } catch (error: any) {
+      console.log('Login error caught:', error.message);
+
+      // Check for email verification error (403)
+      if (error.message.includes('verify your email') ||
+        error.message.includes('Please verify') ||
+        error.message.includes('Email not confirmed')) {
+
+        showStatusMessage('Email not verified. Redirecting to verification...', 'warning');
+
+        setTimeout(() => {
+          Alert.alert(
+            'Email Not Verified',
+            'Please verify your email before logging in. Check your inbox for the verification code.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Verify Now',
+                onPress: () => router.push({ pathname: '/otp', params: { email } })
+              }
+            ]
+          );
+        }, 1500);
+
+        setLoading(false);
+        return;
+      }
+
+      // Check for incorrect credentials
+      let errorMessage = 'Something went wrong. Please try again.';
+
+      if (error.message.includes('Invalid login credentials') ||
+        error.message.includes('Incorrect') ||
+        error.message.includes('Invalid') ||
+        error.message.includes('credentials')) {
+        errorMessage = 'Incorrect email or password';
+      }
+      else if (error.message.includes('network') ||
+        error.message.includes('Network') ||
+        error.message.includes('Failed to fetch')) {
+        errorMessage = 'Network error. Check your connection';
+      }
+      else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      showStatusMessage(errorMessage, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -33,6 +120,13 @@ export default function LoginScreen() {
         <Text style={styles.headerTitle}>Sign In</Text>
         <View style={styles.placeholder} />
       </View>
+
+      <StatusMessage
+        message={statusMessage}
+        type={statusType}
+        visible={showStatus}
+        onHide={() => setShowStatus(false)}
+      />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Welcome Back</Text>
@@ -59,9 +153,10 @@ export default function LoginScreen() {
           </TouchableOpacity>
 
           <Button
-            title="Sign In"
+            title={loading ? "Verifying credentials..." : "Sign In"}
             onPress={handleLogin}
             style={styles.button}
+            disabled={loading}
           />
 
           <View style={styles.signupContainer}>

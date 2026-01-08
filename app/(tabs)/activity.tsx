@@ -12,55 +12,53 @@ import StatusBadge from '@/components/StatusBadge';
 import EmptyState from '@/components/EmptyState';
 import { Colors } from '@/constants/Colors';
 
+import { useEffect, useState, useCallback } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/services/api';
+import { useFocusEffect } from 'expo-router';
+
 export default function ActivityScreen() {
   const { mode } = useMode();
   const router = useRouter();
+  const { token } = useAuth();
 
-  const trips = [
-    {
-      id: '1',
-      from: 'Lagos',
-      to: 'Abuja',
-      date: 'Jan 15, 2026',
-      amount: '₦15,000',
-      status: 'completed' as const,
-    },
-    {
-      id: '2',
-      from: 'Port Harcourt',
-      to: 'Enugu',
-      date: 'Jan 20, 2026',
-      amount: '₦8,500',
-      status: 'active' as const,
-    },
-    {
-      id: '3',
-      from: 'Kano',
-      to: 'Lagos',
-      date: 'Jan 8, 2026',
-      amount: '₦22,000',
-      status: 'completed' as const,
-    },
-  ];
+  const [trips, setTrips] = useState<any[]>([]);
+  const [deliveries, setDeliveries] = useState<any[]>([]);
+  const [userStats, setUserStats] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
 
-  const deliveries = [
-    {
-      id: '1',
-      from: 'Lagos',
-      to: 'Ibadan',
-      date: 'Jan 12, 2026',
-      amount: '₦5,500',
-      status: 'completed' as const,
-    },
-    {
-      id: '2',
-      from: 'Abuja',
-      to: 'Kaduna',
-      date: 'Jan 16, 2026',
-      amount: '₦7,000',
-      status: 'active' as const,
-    },
-  ];
+  const fetchData = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const statsRes = await api.get('/users/stats');
+      if (statsRes.status === 'success') setUserStats(statsRes.data);
+
+      if (mode === 'traveler') {
+        const res = await api.get('/trips');
+        if (res.status === 'success') {
+          // Filter for completed/history? Usually 'activity' implies past?
+          // For now, show ALL trips (active + history) sorted by date
+          setTrips(res.data);
+        }
+      } else {
+        const res = await api.get('/delivery-requests');
+        if (res.status === 'success') {
+          setDeliveries(res.data);
+        }
+      }
+    } catch (error) {
+      console.error('Fetch error:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [mode, token]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [fetchData])
+  );
 
   const renderTravelerActivity = () => (
     <>
@@ -69,7 +67,7 @@ export default function ActivityScreen() {
           <WalletIcon size={24} color={Colors.primary} />
           <Text style={styles.walletTitle}>Available Balance</Text>
         </View>
-        <Text style={styles.walletAmount}>₦45,000</Text>
+        <Text style={styles.walletAmount}>₦{userStats?.wallet?.balance || '0.00'}</Text>
         <TouchableOpacity
           style={styles.withdrawButton}
           onPress={() => router.push('/traveler/wallet')}
@@ -96,7 +94,7 @@ export default function ActivityScreen() {
               <View style={styles.routeContainer}>
                 <MapPin size={16} color={Colors.primary} />
                 <Text style={styles.route}>
-                  {trip.from} → {trip.to}
+                  {trip.origin} → {trip.destination}
                 </Text>
               </View>
               <StatusBadge status={trip.status} />
@@ -104,9 +102,11 @@ export default function ActivityScreen() {
             <View style={styles.cardInfo}>
               <View style={styles.infoRow}>
                 <Calendar size={14} color={Colors.textSecondary} />
-                <Text style={styles.infoText}>{trip.date}</Text>
+                <Text style={styles.infoText}>{new Date(trip.departure_date).toLocaleDateString()}</Text>
               </View>
-              <Text style={styles.amount}>{trip.amount}</Text>
+              <Text style={styles.amount}>
+                {trip.status === 'completed' ? '₦-' : '' /* Price not in trips table yet */}
+              </Text>
             </View>
           </TouchableOpacity>
         ))
@@ -139,7 +139,7 @@ export default function ActivityScreen() {
               <View style={styles.routeContainer}>
                 <MapPin size={16} color={Colors.secondary} />
                 <Text style={styles.route}>
-                  {delivery.from} → {delivery.to}
+                  {delivery.origin} → {delivery.destination}
                 </Text>
               </View>
               <StatusBadge status={delivery.status} />
@@ -147,9 +147,11 @@ export default function ActivityScreen() {
             <View style={styles.cardInfo}>
               <View style={styles.infoRow}>
                 <Calendar size={14} color={Colors.textSecondary} />
-                <Text style={styles.infoText}>{delivery.date}</Text>
+                <Text style={styles.infoText}>{new Date(delivery.delivery_date).toLocaleDateString()}</Text>
               </View>
-              <Text style={styles.amount}>{delivery.amount}</Text>
+              <Text style={styles.amount}>
+                {delivery.estimated_cost ? `₦${delivery.estimated_cost}` : ''}
+              </Text>
             </View>
           </TouchableOpacity>
         ))

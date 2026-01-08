@@ -19,9 +19,11 @@ import {
   ChevronRight,
 } from 'lucide-react-native';
 import { Colors } from '@/constants/Colors';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
 
@@ -32,13 +34,13 @@ export default function SettingsScreen() {
         {
           icon: User,
           label: 'Edit Profile',
-          onPress: () => {},
+          onPress: () => { },
           showArrow: true,
         },
         {
           icon: Shield,
           label: 'Privacy & Security',
-          onPress: () => {},
+          onPress: () => { },
           showArrow: true,
         },
       ],
@@ -63,7 +65,7 @@ export default function SettingsScreen() {
         {
           icon: Globe,
           label: 'Language',
-          onPress: () => {},
+          onPress: () => { },
           showArrow: true,
           value: 'English',
         },
@@ -75,11 +77,23 @@ export default function SettingsScreen() {
         {
           icon: CreditCard,
           label: 'Payment Methods',
-          onPress: () => {},
+          onPress: () => { },
           showArrow: true,
         },
       ],
     },
+    // Only show for Admin
+    ...(user?.email === 'admin@movever.com' ? [{
+      title: 'Admin',
+      items: [
+        {
+          icon: Shield,
+          label: 'Admin Dashboard',
+          onPress: () => router.push('/admin/dashboard'),
+          showArrow: true,
+        },
+      ],
+    }] : []),
   ];
 
   return (
@@ -104,13 +118,13 @@ export default function SettingsScreen() {
           <View key={sectionIndex} style={styles.section}>
             <Text style={styles.sectionTitle}>{section.title}</Text>
             <View style={styles.settingsGroup}>
-              {section.items.map((item, itemIndex) => (
+              {section.items.map((item: any, itemIndex) => (
                 <TouchableOpacity
                   key={itemIndex}
                   style={[
                     styles.settingItem,
                     itemIndex < section.items.length - 1 &&
-                      styles.settingItemBorder,
+                    styles.settingItemBorder,
                   ]}
                   onPress={item.onPress}
                   disabled={item.toggle}
