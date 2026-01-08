@@ -1,0 +1,141 @@
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
+import { ArrowLeft, Video, CheckCircle } from 'lucide-react-native';
+import Button from '@/components/Button';
+import { Colors } from '@/constants/Colors';
+
+export default function VideoRecordingScreen() {
+  const router = useRouter();
+
+  const handleComplete = () => {
+    router.push('/(tabs)');
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
+          <ArrowLeft size={24} color={Colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Video Verification</Text>
+        <View style={styles.placeholder} />
+      </View>
+
+      <View style={styles.content}>
+        <View style={styles.cameraPlaceholder}>
+          <Video size={64} color={Colors.textSecondary} />
+          <Text style={styles.cameraText}>Camera View</Text>
+        </View>
+
+        <View style={styles.instructionsContainer}>
+          <Text style={styles.instructionsTitle}>Instructions</Text>
+          <View style={styles.instruction}>
+            <CheckCircle size={20} color={Colors.primary} />
+            <Text style={styles.instructionText}>
+              Position your face within the frame
+            </Text>
+          </View>
+          <View style={styles.instruction}>
+            <CheckCircle size={20} color={Colors.primary} />
+            <Text style={styles.instructionText}>
+              Ensure good lighting and clear background
+            </Text>
+          </View>
+          <View style={styles.instruction}>
+            <CheckCircle size={20} color={Colors.primary} />
+            <Text style={styles.instructionText}>
+              Follow the on-screen prompts
+            </Text>
+          </View>
+          <View style={styles.instruction}>
+            <CheckCircle size={20} color={Colors.primary} />
+            <Text style={styles.instructionText}>
+              The recording will last 10 seconds
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.buttonContainer}>
+          <Button title="Start Recording" onPress={handleComplete} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 48,
+    paddingBottom: 16,
+    backgroundColor: Colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  placeholder: {
+    width: 40,
+  },
+  content: {
+    flex: 1,
+    padding: 24,
+  },
+  cameraPlaceholder: {
+    aspectRatio: 3 / 4,
+    backgroundColor: Colors.text,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  cameraText: {
+    fontSize: 16,
+    color: Colors.textLight,
+    marginTop: 16,
+    opacity: 0.7,
+  },
+  instructionsContainer: {
+    backgroundColor: Colors.surface,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  instructionsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 12,
+  },
+  instruction: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 8,
+  },
+  instructionText: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.textSecondary,
+    lineHeight: 20,
+  },
+  buttonContainer: {
+    marginTop: 'auto',
+  },
+});
