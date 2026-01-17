@@ -27,9 +27,11 @@ export default function ActivityScreen() {
   const [userStats, setUserStats] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (isSilent = false) => {
     if (!token) return;
-    setLoading(true);
+    if (!isSilent && !trips.length && !deliveries.length) {
+      setLoading(true);
+    }
     try {
       const statsRes = await api.get('/users/stats');
       if (statsRes.status === 'success') setUserStats(statsRes.data);
@@ -37,8 +39,6 @@ export default function ActivityScreen() {
       if (mode === 'traveler') {
         const res = await api.get('/trips');
         if (res.status === 'success') {
-          // Filter for completed/history? Usually 'activity' implies past?
-          // For now, show ALL trips (active + history) sorted by date
           setTrips(res.data);
         }
       } else {
@@ -50,13 +50,17 @@ export default function ActivityScreen() {
     } catch (error) {
       console.error('Fetch error:', error);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
-  }, [mode, token]);
+  }, [mode, token, trips.length, deliveries.length]);
 
   useFocusEffect(
     useCallback(() => {
       fetchData();
+      const interval = setInterval(() => {
+        fetchData(true);
+      }, 5000);
+      return () => clearInterval(interval);
     }, [fetchData])
   );
 
@@ -67,7 +71,7 @@ export default function ActivityScreen() {
           <WalletIcon size={24} color={Colors.primary} />
           <Text style={styles.walletTitle}>Available Balance</Text>
         </View>
-        <Text style={styles.walletAmount}>₦{userStats?.wallet?.balance || '0.00'}</Text>
+        <Text style={styles.walletAmount}>₦{userStats?.wallet?.balance?.toLocaleString() || '0'}</Text>
         <TouchableOpacity
           style={styles.withdrawButton}
           onPress={() => router.push('/traveler/wallet')}
@@ -76,19 +80,21 @@ export default function ActivityScreen() {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.sectionTitle}>Trip History</Text>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Trip History</Text>
+      </View>
 
       {trips.length === 0 ? (
         <EmptyState
           title="No trips yet"
-          description="Your completed and active trips will appear here"
+          description="Your active and past trips will appear here."
         />
       ) : (
         trips.map((trip) => (
           <TouchableOpacity
             key={trip.id}
             style={styles.card}
-            onPress={() => router.push('/traveler/trip-details')}
+            onPress={() => router.push({ pathname: '/traveler/trip-details', params: { id: trip.id } })}
           >
             <View style={styles.cardHeader}>
               <View style={styles.routeContainer}>
@@ -99,14 +105,39 @@ export default function ActivityScreen() {
               </View>
               <StatusBadge status={trip.status} />
             </View>
+
             <View style={styles.cardInfo}>
               <View style={styles.infoRow}>
                 <Calendar size={14} color={Colors.textSecondary} />
-                <Text style={styles.infoText}>{new Date(trip.departure_date).toLocaleDateString()}</Text>
+                <Text style={styles.infoText}>
+                  {(() => {
+                    const dateStr = trip.date || trip.departure_date;
+                    if (!dateStr) return 'Date N/A';
+                    const d = new Date(dateStr);
+                    return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString(undefined, {
+                      weekday: 'short',
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric'
+                    });
+                  })()}
+                </Text>
               </View>
-              <Text style={styles.amount}>
-                {trip.status === 'completed' ? '₦-' : '' /* Price not in trips table yet */}
-              </Text>
+              {trip.total_earnings > 0 && (
+                <Text style={styles.amount}>
+                  +₦{trip.total_earnings.toLocaleString()}
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.cardFooter}>
+              {trip.request_count > 0 && trip.status === 'active' ? (
+                <View style={styles.requestBadge}>
+                  <Text style={styles.requestBadgeText}>{trip.request_count} Request{trip.request_count !== 1 ? 's' : ''}</Text>
+                </View>
+              ) : (
+                <Text style={styles.detailsLink}>View Details</Text>
+              )}
             </View>
           </TouchableOpacity>
         ))
@@ -133,7 +164,7 @@ export default function ActivityScreen() {
           <TouchableOpacity
             key={delivery.id}
             style={styles.card}
-            onPress={() => router.push('/business/delivery-detail')}
+            onPress={() => router.push({ pathname: '/business/delivery-detail', params: { id: delivery.id } })}
           >
             <View style={styles.cardHeader}>
               <View style={styles.routeContainer}>
@@ -147,7 +178,12 @@ export default function ActivityScreen() {
             <View style={styles.cardInfo}>
               <View style={styles.infoRow}>
                 <Calendar size={14} color={Colors.textSecondary} />
-                <Text style={styles.infoText}>{new Date(delivery.delivery_date).toLocaleDateString()}</Text>
+                <Text style={styles.infoText}>
+                  {(() => {
+                    const d = new Date(delivery.delivery_date);
+                    return isNaN(d.getTime()) ? delivery.delivery_date : d.toLocaleDateString();
+                  })()}
+                </Text>
               </View>
               <Text style={styles.amount}>
                 {delivery.estimated_cost ? `₦${delivery.estimated_cost}` : ''}
@@ -307,5 +343,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: Colors.text,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cardFooter: {
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingTop: 12,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  requestBadge: {
+    backgroundColor: Colors.secondary + '20',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  requestBadgeText: {
+    fontSize: 12,
+    color: Colors.secondary,
+    fontWeight: '600',
+  },
+  detailsLink: {
+    fontSize: 14,
+    color: Colors.primary,
+    fontWeight: '600',
   },
 });

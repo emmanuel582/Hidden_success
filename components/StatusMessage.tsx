@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, Platform } from 'react-native';
 import { Colors } from '@/constants/Colors';
 
 interface StatusMessageProps {
@@ -68,11 +68,15 @@ const styles = StyleSheet.create({
         padding: 16,
         borderRadius: 12,
         zIndex: 1000,
-        elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
+        ...(Platform.OS !== 'web' ? {
+            elevation: 5,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 4,
+        } : {
+            boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.25)',
+        } as any),
     },
     message: {
         color: '#FFFFFF',

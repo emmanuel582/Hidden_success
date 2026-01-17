@@ -1,12 +1,39 @@
-import { View, Text, StyleSheet, Image } from 'react-native';
+import { View, Text, StyleSheet, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Truck } from 'lucide-react-native';
 import Button from '@/components/Button';
 import { Colors } from '@/constants/Colors';
 
+import { useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRootNavigationState } from 'expo-router';
+
 export default function WelcomeScreen() {
   const router = useRouter();
+  const { isAuthenticated } = useAuth();
+  const rootNavigationState = useRootNavigationState();
+
+  useEffect(() => {
+    if (isAuthenticated && rootNavigationState?.key) {
+      const timeout = setTimeout(() => {
+        try {
+          router.replace('/(tabs)');
+        } catch (e) {
+          console.warn('Navigation attempt failed:', e);
+        }
+      }, 100);
+      return () => clearTimeout(timeout);
+    }
+  }, [isAuthenticated, router, rootNavigationState?.key]);
+
+  if (isAuthenticated && !rootNavigationState?.key) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.primary }}>
+        <ActivityIndicator color="#ffffff" size="large" />
+      </View>
+    );
+  }
 
   return (
     <LinearGradient

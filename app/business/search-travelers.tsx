@@ -24,22 +24,28 @@ import { useState, useEffect } from 'react';
 
 export default function SearchTravelersScreen() {
   const router = useRouter();
-  const { requestId, origin, destination, date, space } = useLocalSearchParams();
+  const { requestId, origin, destination, date, space, time } = useLocalSearchParams();
 
   const [travelers, setTravelers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [requestingId, setRequestingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTravelers();
-  }, [origin, destination, date, space]);
+    const interval = setInterval(() => {
+      fetchTravelers(true);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [origin, destination, date, space, time]);
 
-  const fetchTravelers = async () => {
-    setLoading(true);
+  const fetchTravelers = async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       const res = await api.get('/trips/search', {
         origin: origin,
         destination: destination,
         date: date,
+        time: time,
         space: space
       });
       if (res.status === 'success') {
@@ -48,7 +54,7 @@ export default function SearchTravelersScreen() {
     } catch (error) {
       console.log('Search Error:', error);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
@@ -59,6 +65,7 @@ export default function SearchTravelersScreen() {
       return;
     }
 
+    setRequestingId(tripId);
     try {
       const res = await api.post('/matches/request', {
         tripId: tripId,
@@ -73,6 +80,8 @@ export default function SearchTravelersScreen() {
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'An error occurred');
+    } finally {
+      setRequestingId(null);
     }
   };
 
@@ -80,7 +89,7 @@ export default function SearchTravelersScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/business/post-delivery')}
           style={styles.backButton}
         >
           <ArrowLeft size={24} color={Colors.text} />
@@ -98,7 +107,13 @@ export default function SearchTravelersScreen() {
         </View>
         <View style={styles.dateRow}>
           <Calendar size={14} color={Colors.textSecondary} />
-          <Text style={styles.dateText}>{date || 'Any Date'}</Text>
+          <Text style={styles.dateText}>
+            {(() => {
+              if (!date) return 'Any Date';
+              const d = new Date(date as string);
+              return isNaN(d.getTime()) ? date : d.toLocaleDateString();
+            })()}
+          </Text>
         </View>
       </View>
 
@@ -149,9 +164,9 @@ export default function SearchTravelersScreen() {
                           color={Colors.warning}
                           fill={Colors.warning}
                         />
-                        <Text style={styles.rating}>4.5</Text>
+                        <Text style={styles.rating}>Verified</Text>
                         <Text style={styles.trips}>
-                          (12 trips)
+                          {/* (Trips count not available yet) */}
                         </Text>
                       </View>
                     </View>
@@ -178,7 +193,11 @@ export default function SearchTravelersScreen() {
                   <View style={styles.tripRow}>
                     <Calendar size={16} color={Colors.textSecondary} />
                     <Text style={styles.tripText}>
-                      {trip.departure_date} at {trip.departure_time || 'anytime'}
+                      {(() => {
+                        const d = new Date(trip.departure_date);
+                        const dateStr = isNaN(d.getTime()) ? trip.departure_date : d.toLocaleDateString();
+                        return `${dateStr} at ${trip.departure_time || 'anytime'}`;
+                      })()}
                     </Text>
                   </View>
                 </View>
@@ -192,6 +211,8 @@ export default function SearchTravelersScreen() {
                   title="Send Request"
                   onPress={() => handleSendRequest(trip.id)}
                   variant="secondary"
+                  loading={requestingId === trip.id}
+                  disabled={requestingId !== null && requestingId !== trip.id}
                 />
               </View>
             ))}

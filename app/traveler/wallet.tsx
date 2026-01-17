@@ -15,43 +15,39 @@ import {
 import Button from '@/components/Button';
 import { Colors } from '@/constants/Colors';
 
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/services/api';
+import { useFocusEffect } from 'expo-router';
+
 export default function WalletScreen() {
   const router = useRouter();
+  const { token } = useAuth();
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  const transactions = [
-    {
-      id: '1',
-      type: 'credit' as const,
-      description: 'Delivery fee - Lagos to Abuja',
-      amount: '₦15,000',
-      date: 'Jan 15, 2026',
-      status: 'completed',
-    },
-    {
-      id: '2',
-      type: 'debit' as const,
-      description: 'Withdrawal to bank account',
-      amount: '₦30,000',
-      date: 'Jan 12, 2026',
-      status: 'completed',
-    },
-    {
-      id: '3',
-      type: 'credit' as const,
-      description: 'Delivery fee - Port Harcourt to Enugu',
-      amount: '₦8,500',
-      date: 'Jan 10, 2026',
-      status: 'completed',
-    },
-    {
-      id: '4',
-      type: 'credit' as const,
-      description: 'Delivery fee - Kano to Lagos',
-      amount: '₦22,000',
-      date: 'Jan 8, 2026',
-      status: 'completed',
-    },
-  ];
+  const fetchWalletData = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await api.get('/users/stats');
+      if (res.status === 'success') {
+        setStats(res.data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchWalletData();
+    }, [fetchWalletData])
+  );
+
+  const wallet = stats?.wallet || { balance: '0', pending_balance: '0', total_earned: '0' };
+  const deliveriesCount = stats?.counts?.completedTrips || 0;
 
   return (
     <View style={styles.container}>
@@ -76,10 +72,11 @@ export default function WalletScreen() {
             <TrendingUp size={24} color={Colors.textLight} />
             <Text style={styles.balanceLabel}>Available Balance</Text>
           </View>
-          <Text style={styles.balance}>₦45,000</Text>
+          <Text style={styles.balance}>₦{Number(wallet.balance).toLocaleString()}</Text>
           <Button
             title="Withdraw to Bank"
-            onPress={() => {}}
+            onPress={() => { }}
+            variant="secondary"
             style={styles.withdrawButton}
           />
         </View>
@@ -87,76 +84,35 @@ export default function WalletScreen() {
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <ArrowDownToLine size={20} color={Colors.primary} />
-            <Text style={styles.statValue}>₦120,500</Text>
-            <Text style={styles.statLabel}>Total Earned</Text>
+            <Text style={[styles.statValue, { color: Colors.primary }]}>
+              ₦{Number(wallet.pending_balance).toLocaleString()}
+            </Text>
+            <Text style={styles.statLabel}>Incoming (Pending)</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>12</Text>
-            <Text style={styles.statLabel}>Deliveries</Text>
+            <TrendingUp size={20} color={Colors.secondary} />
+            <Text style={styles.statValue}>
+              ₦{Number(wallet.total_earned).toLocaleString()}
+            </Text>
+            <Text style={styles.statLabel}>Total Earned</Text>
           </View>
+        </View>
+
+        <View style={styles.infoCard}>
+          <Text style={styles.infoTitle}>Payment Indicator</Text>
+          <Text style={styles.infoText}>
+            Funds are held in escrow when a business pays. They shift from 'Incoming' to 'Available' once the delivery is confirmed by OTP.
+          </Text>
         </View>
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Transaction History</Text>
+          <Text style={styles.sectionTitle}>Deliveries Overview</Text>
         </View>
 
-        {transactions.map((transaction) => (
-          <View key={transaction.id} style={styles.transactionCard}>
-            <View style={styles.transactionLeft}>
-              <View
-                style={[
-                  styles.transactionIcon,
-                  {
-                    backgroundColor:
-                      transaction.type === 'credit'
-                        ? Colors.primary + '20'
-                        : Colors.error + '20',
-                  },
-                ]}
-              >
-                <ArrowDownToLine
-                  size={20}
-                  color={
-                    transaction.type === 'credit'
-                      ? Colors.primary
-                      : Colors.error
-                  }
-                  style={{
-                    transform: [
-                      {
-                        rotate:
-                          transaction.type === 'credit' ? '180deg' : '0deg',
-                      },
-                    ],
-                  }}
-                />
-              </View>
-              <View style={styles.transactionDetails}>
-                <Text style={styles.transactionDescription}>
-                  {transaction.description}
-                </Text>
-                <View style={styles.transactionMeta}>
-                  <Calendar size={12} color={Colors.textSecondary} />
-                  <Text style={styles.transactionDate}>{transaction.date}</Text>
-                </View>
-              </View>
-            </View>
-            <Text
-              style={[
-                styles.transactionAmount,
-                {
-                  color:
-                    transaction.type === 'credit'
-                      ? Colors.primary
-                      : Colors.error,
-                },
-              ]}
-            >
-              {transaction.type === 'credit' ? '+' : '-'}
-              {transaction.amount}
-            </Text>
-          </View>
-        ))}
+        <View style={styles.totalDeliveriesCard}>
+          <Text style={styles.totalValue}>{deliveriesCount}</Text>
+          <Text style={styles.totalLabel}>Completed Deliveries</Text>
+        </View>
       </ScrollView>
     </View>
   );
@@ -300,5 +256,45 @@ const styles = StyleSheet.create({
   transactionAmount: {
     fontSize: 16,
     fontWeight: '700',
+  },
+  infoCard: {
+    backgroundColor: Colors.surface,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.primary,
+    marginBottom: 24,
+  },
+  infoTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  infoText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    lineHeight: 18,
+  },
+  totalDeliveriesCard: {
+    backgroundColor: Colors.surface,
+    padding: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginTop: 12,
+  },
+  totalValue: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: Colors.secondary,
+  },
+  totalLabel: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginTop: 4,
   },
 });

@@ -8,9 +8,33 @@ import {
 } from 'lucide-react-native';
 import { useMode } from '@/contexts/ModeContext';
 import { Colors } from '@/constants/Colors';
+import { useState, useEffect } from 'react';
+import { api } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function TabLayout() {
   const { mode } = useMode();
+  const { token } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!token) return;
+
+    const fetchCount = async () => {
+      try {
+        const res = await api.get('/notifications/unread-count');
+        if (res.status === 'success') {
+          setUnreadCount(res.data.count);
+        }
+      } catch (e) {
+        console.log('Error fetching unread count:', e);
+      }
+    };
+
+    fetchCount();
+    const interval = setInterval(fetchCount, 5000);
+    return () => clearInterval(interval);
+  }, [token]);
 
   return (
     <Tabs
@@ -56,6 +80,11 @@ export default function TabLayout() {
         options={{
           title: 'Notifications',
           tabBarIcon: ({ size, color }) => <Bell size={size} color={color} />,
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: mode === 'traveler' ? Colors.primary : Colors.secondary,
+            color: Colors.textLight,
+          },
         }}
       />
       <Tabs.Screen

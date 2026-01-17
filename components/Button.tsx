@@ -4,6 +4,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   ViewStyle,
+  StyleProp,
 } from 'react-native';
 import { Colors } from '@/constants/Colors';
 
@@ -13,7 +14,7 @@ interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'outline' | 'danger';
   disabled?: boolean;
   loading?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 export default function Button({

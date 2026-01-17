@@ -7,10 +7,11 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, MapPin, Calendar, Package, Info } from 'lucide-react-native';
+import { ArrowLeft, MapPin, Calendar, Package, Info, ShieldAlert } from 'lucide-react-native';
 import Input from '@/components/Input';
 import Button from '@/components/Button';
 import { Colors } from '@/constants/Colors';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
@@ -18,20 +19,64 @@ import { Alert } from 'react-native';
 
 export default function PostDeliveryScreen() {
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [fromLocation, setFromLocation] = useState('');
   const [toLocation, setToLocation] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [time, setTime] = useState(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [selectedSize, setSelectedSize] = useState<string>('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
+
+  if (user && !user.is_verified) {
+    return (
+      <View style={[styles.container, { padding: 20, justifyContent: 'center', alignItems: 'center' }]}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}
+            style={styles.backButton}
+          >
+            <ArrowLeft size={24} color={Colors.text} />
+          </TouchableOpacity>
+        </View>
+        <ShieldAlert size={64} color={Colors.error} style={{ marginBottom: 20 }} />
+        <Text style={[styles.title, { textAlign: 'center', marginBottom: 10 }]}>Verification Required</Text>
+        <Text style={[styles.subtitle, { textAlign: 'center', marginBottom: 30 }]}>
+          To ensure safety, you must verify your identity before sending packages.
+        </Text>
+        <Button
+          title="Verify Identity"
+          onPress={() => router.push('/verify/identity')}
+        />
+      </View>
+    );
+  }
 
   const sizeOptions = [
     { id: 'small', label: 'Small', description: 'Up to 5kg', price: '₦5,000', numericPrice: 5000 },
     { id: 'medium', label: 'Medium', description: 'Up to 15kg', price: '₦10,000', numericPrice: 10000 },
     { id: 'large', label: 'Large', description: 'Up to 30kg', price: '₦18,000', numericPrice: 18000 },
   ];
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      // Format as YYYY-MM-DD for backend
+      const formattedDate = selectedDate.toISOString().split('T')[0];
+      setDate(formattedDate);
+    }
+  };
+
+  const onTimeChange = (event: any, selectedDate?: Date) => {
+    setShowTimePicker(false);
+    if (selectedDate) {
+      // Format as HH:MM
+      const formattedTime = selectedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+      setTime(formattedTime);
+    }
+  };
 
   const handlePostDelivery = async () => {
     if (!fromLocation || !toLocation || !date || !selectedSize) {
@@ -42,7 +87,7 @@ export default function PostDeliveryScreen() {
     setLoading(true);
     try {
       const selectedOption = sizeOptions.find(o => o.id === selectedSize);
-      const res = await api.post('/deliveries', {
+      const res = await api.post('/delivery-requests', {
         origin: fromLocation,
         destination: toLocation,
         delivery_date: date,
@@ -62,6 +107,7 @@ export default function PostDeliveryScreen() {
             origin: fromLocation,
             destination: toLocation,
             date: date,
+            time: time, // Added time to params
             space: selectedSize
           }
         });
@@ -82,7 +128,7 @@ export default function PostDeliveryScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}
           style={styles.backButton}
         >
           <ArrowLeft size={24} color={Colors.text} />
@@ -124,20 +170,56 @@ export default function PostDeliveryScreen() {
             </View>
           </View>
 
+          {/* Date and Time Pickers */}
           <View style={styles.dateTimeRow}>
-            <Input
-              placeholder="Date"
-              value={date}
-              onChangeText={setDate}
-              style={styles.dateTimeInput}
-            />
-            <Input
-              placeholder="Time"
-              value={time}
-              onChangeText={setTime}
-              style={styles.dateTimeInput}
-            />
+            <TouchableOpacity
+              style={styles.dateTimeInputContainer}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Input
+                placeholder="Date"
+                value={date ? new Date(date).toLocaleDateString() : ''}
+                editable={false}
+                style={styles.dateTimeInput}
+                onPressIn={() => setShowDatePicker(true)}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.dateTimeInputContainer}
+              onPress={() => setShowTimePicker(true)}
+            >
+              <Input
+                placeholder="Time"
+                value={time}
+                editable={false}
+                style={styles.dateTimeInput}
+                onPressIn={() => setShowTimePicker(true)}
+              />
+            </TouchableOpacity>
           </View>
+
+          {showDatePicker ? (
+            <DateTimePicker
+              testID="datePicker"
+              value={date ? new Date(date) : new Date()}
+              mode="date"
+              is24Hour={true}
+              display="default"
+              onChange={onDateChange}
+            />
+          ) : null}
+
+          {showTimePicker ? (
+            <DateTimePicker
+              testID="timePicker"
+              value={new Date(`2000-01-01T${time}:00`)}
+              mode="time"
+              is24Hour={true}
+              display="default"
+              onChange={onTimeChange}
+            />
+          ) : null}
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Package Size</Text>
@@ -299,8 +381,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   dateTimeInput: {
-    flex: 1,
     marginBottom: 0,
+    color: Colors.text,
+  },
+  dateTimeInputContainer: {
+    flex: 1,
   },
   section: {
     marginTop: 8,

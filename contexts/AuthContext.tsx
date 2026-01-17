@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { Platform } from 'react-native';
 import { api } from '@/services/api';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 interface AuthContextType {
     user: any | null;
@@ -8,6 +10,7 @@ interface AuthContextType {
     signIn: (token: string, userData: any) => void;
     signOut: () => void;
     checkVerificationStatus: () => Promise<void>;
+    initialCheckDone: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -17,22 +20,70 @@ const AuthContext = createContext<AuthContextType>({
     signIn: () => { },
     signOut: () => { },
     checkVerificationStatus: async () => { },
+    initialCheckDone: false,
 });
 
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [user, setUser] = useState<any | null>(null);
-    const [token, setToken] = useState<string | null>(null);
+    const { registerForPushNotificationsAsync, sendTokenToBackend } = usePushNotifications();
+
+    // Initialize synchronously to avoid flash
+    const [token, setToken] = useState<string | null>(() => {
+        if (Platform.OS === 'web') {
+            try {
+                const stored = localStorage.getItem('auth_token');
+                if (stored) {
+                    api.setToken(stored); // Ensure API is ready immediately
+                    return stored;
+                }
+            } catch (e) {
+                console.error('Failed to access localStorage', e);
+            }
+        }
+        return null;
+    });
+
+    const [user, setUser] = useState<any | null>(() => {
+        if (Platform.OS === 'web') {
+            try {
+                const stored = localStorage.getItem('auth_user');
+                return stored ? JSON.parse(stored) : null;
+            } catch (e) {
+                return null;
+            }
+        }
+        return null;
+    });
+    const [initialCheckDone, setInitialCheckDone] = useState(false);
 
     useEffect(() => {
-        // In a real app, load from SecureStore/AsyncStorage here
-    }, []);
+        if (token) {
+            // Register and sync push token
+            registerForPushNotificationsAsync().then(pushToken => {
+                if (pushToken) {
+                    console.log('Got Push Token:', pushToken);
+                    sendTokenToBackend(pushToken);
+                }
+            });
+
+            if (!initialCheckDone) {
+                checkVerificationStatus().then(() => setInitialCheckDone(true));
+            }
+        }
+    }, [token]);
 
     const signIn = (newToken: string, userData: any) => {
         setToken(newToken);
         setUser(userData);
         api.setToken(newToken);
+
+        // Save to storage
+        if (Platform.OS === 'web') {
+            localStorage.setItem('auth_token', newToken);
+            localStorage.setItem('auth_user', JSON.stringify(userData));
+        }
+
         console.log('User signed in:', userData.email);
     };
 
@@ -79,7 +130,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setToken(null);
         setUser(null);
         api.setToken(null);
+        if (Platform.OS === 'web') {
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('auth_user');
+        }
     };
+
 
     return (
         <AuthContext.Provider
@@ -90,6 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 signIn,
                 signOut,
                 checkVerificationStatus,
+                initialCheckDone,
             }}
         >
             {children}

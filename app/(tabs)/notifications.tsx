@@ -17,45 +17,88 @@ interface Notification {
   message: string;
   time: string;
   read: boolean;
+  metadata?: any;
 }
 
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
-import { useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 
 export default function NotificationsScreen() {
+  const router = useRouter();
   const { token } = useAuth();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async (isSilent = false) => {
     if (!token) return;
+    if (!isSilent && !notifications.length) {
+      setLoading(true);
+    }
     try {
       const res = await api.get('/notifications');
       if (res.status === 'success') {
-        const mapped = (res.data || []).map((n: any) => ({
+        const sorted = (res.data || []).sort((a: any, b: any) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        const mapped = sorted.map((n: any) => ({
           id: n.id,
-          type: n.type || 'info', // success, info, warning, delivery
+          type: n.type || 'info',
           title: n.title,
           message: n.message,
-          time: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          read: n.is_read
+          time: (() => {
+            const d = new Date(n.created_at);
+            if (isNaN(d.getTime())) return 'Just now';
+            const now = new Date();
+            const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 3600 * 24));
+
+            if (diffDays === 0) {
+              return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } else if (diffDays === 1) {
+              return 'Yesterday';
+            } else if (diffDays < 7) {
+              return d.toLocaleDateString([], { weekday: 'short' });
+            } else {
+              return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+            }
+          })(),
+          read: n.is_read,
+          metadata: n.metadata
         }));
         setNotifications(mapped);
       }
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
-  }, [token]);
+  }, [token, notifications.length]);
 
   useFocusEffect(
     useCallback(() => {
       fetchNotifications();
+      const interval = setInterval(() => {
+        fetchNotifications(true);
+      }, 5000);
+      return () => clearInterval(interval);
     }, [fetchNotifications])
   );
+
+  const markAllAsRead = async () => {
+    if (notifications.every(n => n.read)) return;
+
+    // Optimistic update
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+
+    try {
+      await api.patch('/notifications/read-all', {});
+    } catch (e) {
+      console.error('Failed to mark all as read:', e);
+      // Re-fetch on error to sync state
+      fetchNotifications(true);
+    }
+  };
 
   const getIcon = (type: NotificationType) => {
     switch (type) {
@@ -91,7 +134,7 @@ export default function NotificationsScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Notifications</Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={markAllAsRead}>
           <Text style={styles.markAllRead}>Mark all as read</Text>
         </TouchableOpacity>
       </View>
@@ -114,6 +157,39 @@ export default function NotificationsScreen() {
                 styles.notificationCard,
                 !notification.read && styles.unread,
               ]}
+              onPress={() => {
+                // Navigate immediately based on metadata (don't wait for API)
+                const meta = notification.metadata;
+                if (meta) {
+                  console.log('Notification Click Meta:', meta);
+
+                  // Routing Logic
+                  if (meta.type === 'match_requested' && meta.status === 'pending') {
+                    // Traveler: New request, go to trip details to accept
+                    router.push({ pathname: '/traveler/trip-details', params: { id: meta.tripId } });
+                  } else if (meta.type === 'match_accepted') {
+                    // Business: Traveler accepted, go to delivery detail to pay
+                    router.push(`/business/delivery-detail?id=${meta.requestId}`);
+                  } else if (meta.requestId && !meta.matchId) {
+                    // Logic for business-originated notifications
+                    router.push(`/business/delivery-detail?id=${meta.requestId}`);
+                  } else if (meta.matchId) {
+                    // Default for match-related (pickup, delivery, payment success)
+                    router.push(`/traveler/active-delivery?matchId=${meta.matchId}`);
+                  } else if (meta.tripId) {
+                    router.push({ pathname: '/traveler/trip-details', params: { id: meta.tripId } });
+                  }
+                }
+
+                // Mark as read in background optimistically
+                if (!notification.read) {
+                  setNotifications(prev => prev.map(n => n.id === notification.id ? { ...n, read: true } : n));
+                  api.patch(`/notifications/${notification.id}/read`, {}).catch(e => {
+                    console.error('Failed to mark as read:', e);
+                    // On error, the next poll will fix the state anyway
+                  });
+                }
+              }}
             >
               <View
                 style={[
@@ -132,7 +208,7 @@ export default function NotificationsScreen() {
                 </Text>
                 <Text style={styles.notificationTime}>{notification.time}</Text>
               </View>
-              {!notification.read && <View style={styles.unreadDot} />}
+              {!notification.read ? <View style={styles.unreadDot} /> : null}
             </TouchableOpacity>
           ))
         )}

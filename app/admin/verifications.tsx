@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Linking } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { ArrowLeft, User, CheckCircle, X, ExternalLink } from 'lucide-react-native';
 import StatusBadge from '@/components/StatusBadge';
@@ -104,7 +104,7 @@ export default function AdminVerificationsScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/admin/dashboard')}
           style={styles.backButton}
         >
           <ArrowLeft size={24} color={Colors.text} />
@@ -152,8 +152,16 @@ export default function AdminVerificationsScreen() {
                 {/* Add links to view documents/videos if needed */}
                 <View style={styles.docsContainer}>
                   <Text style={styles.docsTitle}>Documents:</Text>
-                  {verification.details?.id_document_url && <Text style={styles.docLink}>• ID Document</Text>}
-                  {verification.details?.live_video_url && <Text style={styles.docLink}>• Live Video</Text>}
+                  {verification.details?.id_document_url && (
+                    <TouchableOpacity onPress={() => Linking.openURL(verification.details.id_document_url)} style={{ paddingVertical: 4 }}>
+                      <Text style={styles.docLink}>• View ID Document <ExternalLink size={12} color={Colors.primary} /></Text>
+                    </TouchableOpacity>
+                  )}
+                  {verification.details?.live_video_url && (
+                    <TouchableOpacity onPress={() => Linking.openURL(verification.details.live_video_url)} style={{ paddingVertical: 4 }}>
+                      <Text style={styles.docLink}>• View Live Video <ExternalLink size={12} color={Colors.primary} /></Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
 

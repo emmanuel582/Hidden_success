@@ -5,27 +5,59 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, MapPin, Calendar, Package } from 'lucide-react-native';
+import { ArrowLeft, Package, ShieldAlert } from 'lucide-react-native';
 import Input from '@/components/Input';
 import Button from '@/components/Button';
 import { Colors } from '@/constants/Colors';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import OpenStreetMapAutocomplete from '@/components/OsmAutocomplete';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
-import { Alert } from 'react-native';
 
 export default function PostTripScreen() {
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+
   const [fromLocation, setFromLocation] = useState('');
   const [toLocation, setToLocation] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
+
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
   const [selectedSpace, setSelectedSpace] = useState<string>('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
+
+  if (user && !user.is_verified) {
+    return (
+      <View style={[styles.container, { padding: 20, justifyContent: 'center', alignItems: 'center' }]}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}
+            style={styles.backButton}
+          >
+            <ArrowLeft size={24} color={Colors.text} />
+          </TouchableOpacity>
+        </View>
+        <ShieldAlert size={64} color={Colors.error} style={{ marginBottom: 20 }} />
+        <Text style={[styles.title, { textAlign: 'center', marginBottom: 10 }]}>Verification Required</Text>
+        <Text style={[styles.subtitle, { textAlign: 'center', marginBottom: 30 }]}>
+          To ensure safety, you must verify your identity before posting trips.
+        </Text>
+        <Button
+          title="Verify Identity"
+          onPress={() => router.push('/verify/identity')}
+        />
+      </View>
+    );
+  }
 
   const spaceOptions = [
     { id: 'small', label: 'Small', description: 'Up to 5kg' },
@@ -33,19 +65,46 @@ export default function PostTripScreen() {
     { id: 'large', label: 'Large', description: 'Up to 30kg' },
   ];
 
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      const newDate = new Date(date);
+      newDate.setFullYear(
+        selectedDate.getFullYear(),
+        selectedDate.getMonth(),
+        selectedDate.getDate()
+      );
+      setDate(newDate);
+    }
+  };
+
+  const onTimeChange = (event: any, selectedDate?: Date) => {
+    setShowTimePicker(false);
+    if (selectedDate) {
+      const newDate = new Date(date);
+      newDate.setHours(selectedDate.getHours(), selectedDate.getMinutes());
+      setDate(newDate);
+    }
+  };
+
   const handlePostTrip = async () => {
-    if (!fromLocation || !toLocation || !date || !selectedSpace) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    if (!fromLocation || !toLocation || !selectedSpace) {
+      Alert.alert('Error', 'Please fill in required fields (From, To, Space)');
       return;
     }
 
     setLoading(true);
     try {
+      // Format date as YYYY-MM-DD
+      const departure_date = date.toISOString().split('T')[0];
+      // Format time as HH:MM:00
+      const departure_time = date.toTimeString().split(' ')[0];
+
       const res = await api.post('/trips', {
         origin: fromLocation,
         destination: toLocation,
-        departure_date: date,
-        departure_time: time,
+        departure_date,
+        departure_time,
         available_space: selectedSpace,
         description: description,
       });
@@ -67,7 +126,7 @@ export default function PostTripScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}
           style={styles.backButton}
         >
           <ArrowLeft size={24} color={Colors.text} />
@@ -76,109 +135,148 @@ export default function PostTripScreen() {
         <View style={styles.placeholder} />
       </View>
 
-      <ScrollView
-        style={styles.content}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
       >
-        <Text style={styles.title}>Share Your Journey</Text>
-        <Text style={styles.subtitle}>
-          Post your travel details and earn from deliveries
-        </Text>
+        <ScrollView
+          style={styles.content}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={styles.title}>Share Your Journey</Text>
+          <Text style={styles.subtitle}>
+            Post your travel details and earn from deliveries
+          </Text>
 
-        <View style={styles.form}>
-          <View style={styles.locationSection}>
-            <View style={styles.locationIndicator}>
-              <View style={styles.fromDot} />
-              <View style={styles.locationLine} />
-              <View style={styles.toDot} />
-            </View>
-            <View style={styles.locationInputs}>
-              <Input
-                placeholder="From (City)"
-                value={fromLocation}
-                onChangeText={setFromLocation}
-                style={styles.locationInput}
-              />
-              <Input
-                placeholder="To (City)"
-                value={toLocation}
-                onChangeText={setToLocation}
-                style={styles.locationInput}
-              />
-            </View>
-          </View>
+          <View style={styles.form}>
+            <View style={styles.locationSection}>
+              <View style={styles.locationIndicator}>
+                <View style={styles.fromDot} />
+                <View style={styles.locationLine} />
+                <View style={styles.toDot} />
+              </View>
 
-          <View style={styles.dateTimeRow}>
-            <Input
-              placeholder="Date"
-              value={date}
-              onChangeText={setDate}
-              style={styles.dateTimeInput}
-            />
-            <Input
-              placeholder="Time"
-              value={time}
-              onChangeText={setTime}
-              style={styles.dateTimeInput}
-            />
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Available Space</Text>
-            <View style={styles.spaceOptions}>
-              {spaceOptions.map((option) => (
-                <TouchableOpacity
-                  key={option.id}
-                  style={[
-                    styles.spaceOption,
-                    selectedSpace === option.id && styles.spaceOptionSelected,
-                  ]}
-                  onPress={() => setSelectedSpace(option.id)}
-                >
-                  <Package
-                    size={24}
-                    color={
-                      selectedSpace === option.id
-                        ? Colors.primary
-                        : Colors.textSecondary
-                    }
+              <View style={styles.locationInputs}>
+                {/* FROM Location Autocomplete */}
+                <View style={[styles.autocompleteContainer, { zIndex: 100 }]}>
+                  <OpenStreetMapAutocomplete
+                    placeholder="From (City)"
+                    value={fromLocation}
+                    onSelect={(item) => setFromLocation(item.display_name)}
+                    onChangeText={setFromLocation}
                   />
-                  <Text
-                    style={[
-                      styles.spaceLabel,
-                      selectedSpace === option.id && styles.spaceLabelSelected,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                  <Text style={styles.spaceDescription}>
-                    {option.description}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                </View>
+
+                {/* TO Location Autocomplete */}
+                <View style={[styles.autocompleteContainer, { zIndex: 90 }]}>
+                  <OpenStreetMapAutocomplete
+                    placeholder="To (City)"
+                    value={toLocation}
+                    onSelect={(item) => setToLocation(item.display_name)}
+                    onChangeText={setToLocation}
+                  />
+                </View>
+              </View>
             </View>
+
+            {/* Date and Time Pickers */}
+            <View style={styles.dateTimeRow}>
+              <TouchableOpacity
+                style={styles.dateTimeInputContainer}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Input
+                  placeholder="Date"
+                  value={date.toLocaleDateString()}
+                  editable={Platform.OS === 'web'}
+                  style={styles.dateTimeInput}
+                  onPressIn={() => setShowDatePicker(true)}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.dateTimeInputContainer}
+                onPress={() => setShowTimePicker(true)}
+              >
+                <Input
+                  placeholder="Time"
+                  value={date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  editable={Platform.OS === 'web'}
+                  style={styles.dateTimeInput}
+                  onPressIn={() => setShowTimePicker(true)}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {(showDatePicker || showTimePicker) && (
+              <DateTimePicker
+                testID="dateTimePicker"
+                value={date}
+                mode={showDatePicker ? 'date' : 'time'}
+                is24Hour={true}
+                display="default"
+                onChange={showDatePicker ? onDateChange : onTimeChange}
+              />
+            )}
+
+            <View style={[styles.section, { zIndex: -1 }]}>
+              <Text style={styles.sectionTitle}>Available Space</Text>
+              <View style={styles.spaceOptions}>
+                {spaceOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option.id}
+                    style={[
+                      styles.spaceOption,
+                      selectedSpace === option.id && styles.spaceOptionSelected,
+                    ]}
+                    onPress={() => setSelectedSpace(option.id)}
+                  >
+                    <Package
+                      size={24}
+                      color={
+                        selectedSpace === option.id
+                          ? Colors.primary
+                          : Colors.textSecondary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.spaceLabel,
+                        selectedSpace === option.id && styles.spaceLabelSelected,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                    <Text style={styles.spaceDescription}>
+                      {option.description}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <Input
+              placeholder="Trip description (optional)"
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              numberOfLines={4}
+            />
+
+            <View style={styles.noteCard}>
+              <Text style={styles.noteTitle}>Note:</Text>
+              <Text style={styles.noteText}>
+                By posting this trip, you agree to accept delivery requests from
+                verified businesses along your route.
+              </Text>
+            </View>
+
+            <Button title="Post Trip" onPress={handlePostTrip} loading={loading} />
           </View>
-
-          <Input
-            placeholder="Trip description (optional)"
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={4}
-          />
-
-          <View style={styles.noteCard}>
-            <Text style={styles.noteTitle}>Note:</Text>
-            <Text style={styles.noteText}>
-              By posting this trip, you agree to accept delivery requests from
-              verified businesses along your route.
-            </Text>
-          </View>
-
-          <Button title="Post Trip" onPress={handlePostTrip} loading={loading} />
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -198,6 +296,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+    zIndex: 10,
   },
   backButton: {
     padding: 8,
@@ -234,6 +333,7 @@ const styles = StyleSheet.create({
   locationSection: {
     flexDirection: 'row',
     gap: 12,
+    zIndex: 100, // Highest zIndex for location inputs
   },
   locationIndicator: {
     alignItems: 'center',
@@ -261,19 +361,23 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 16,
   },
-  locationInput: {
-    marginBottom: 0,
+  autocompleteContainer: {
+    flex: 1,
   },
   dateTimeRow: {
     flexDirection: 'row',
     gap: 12,
+    zIndex: -1,
+  },
+  dateTimeInputContainer: {
+    flex: 1,
   },
   dateTimeInput: {
-    flex: 1,
     marginBottom: 0,
   },
   section: {
     marginTop: 8,
+    zIndex: -1,
   },
   sectionTitle: {
     fontSize: 16,

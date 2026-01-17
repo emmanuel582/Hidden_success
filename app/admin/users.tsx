@@ -49,7 +49,7 @@ export default function AdminUsersScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/admin/dashboard')}
           style={styles.backButton}
         >
           <ArrowLeft size={24} color={Colors.text} />
@@ -76,7 +76,7 @@ export default function AdminUsersScreen() {
               <View style={styles.userLeft}>
                 <View style={styles.avatar}>
                   <Text style={styles.avatarText}>
-                    {user.name.split(' ').map(n => n[0]).join('')}
+                    {user.name.split(' ').map((n: string) => n[0]).join('')}
                   </Text>
                 </View>
                 <View style={styles.userInfo}>

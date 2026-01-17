@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -27,11 +28,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
 import { useFocusEffect } from 'expo-router';
 
-// ... imports
+
 
 export default function DashboardScreen() {
   const { mode, setMode } = useMode();
-  const { user, checkVerificationStatus, token } = useAuth();
+  const { user, checkVerificationStatus, token, initialCheckDone } = useAuth();
   const router = useRouter();
 
   // Poll for verification status changes if user is not verified
@@ -51,14 +52,18 @@ export default function DashboardScreen() {
   );
 
   const [travelerTrips, setTravelerTrips] = useState<any[]>([]);
+  const [activeMatches, setActiveMatches] = useState<any[]>([]);
   const [businessDeliveries, setBusinessDeliveries] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Default to true
+  const [isFirstFetch, setIsFirstFetch] = useState(true);
 
   const [userStats, setUserStats] = useState<any>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (isSilent = false) => {
     if (!token) return;
-    setLoading(true);
+    if (!isSilent && !travelerTrips.length && !businessDeliveries.length) {
+      setLoading(true);
+    }
     try {
       // Fetch Stats
       const statsRes = await api.get('/users/stats');
@@ -71,6 +76,11 @@ export default function DashboardScreen() {
         if (res.status === 'success') {
           setTravelerTrips(res.data);
         }
+        // Fetch traveler matches
+        const matchesRes = await api.get('/matches/my-deliveries');
+        if (matchesRes.status === 'success') {
+          setActiveMatches(matchesRes.data);
+        }
       } else {
         const res = await api.get('/delivery-requests');
         if (res.status === 'success') {
@@ -80,7 +90,8 @@ export default function DashboardScreen() {
     } catch (error) {
       console.error('Fetch Error:', error);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
+      setIsFirstFetch(false);
     }
   }, [mode, token]);
 
@@ -89,10 +100,9 @@ export default function DashboardScreen() {
     useCallback(() => {
       fetchData();
 
-      // Global Live Updates: Poll every 10 seconds for new trips/deliveries
       const interval = setInterval(() => {
-        fetchData();
-      }, 10000);
+        fetchData(true); // Silent poll
+      }, 5000);
 
       return () => clearInterval(interval);
     }, [fetchData])
@@ -126,34 +136,77 @@ export default function DashboardScreen() {
           title="No active trips"
           description="Post a trip to start earning from deliveries"
         />
-      ) : (
-        travelerTrips.map((trip) => (
-          <TouchableOpacity
-            key={trip.id}
-            style={styles.tripCard}
-            onPress={() => router.push('/traveler/trip-details')}
-          >
-            <View style={styles.tripHeader}>
-              <View style={styles.routeContainer}>
-                <MapPin size={16} color={Colors.primary} />
-                <Text style={styles.route}>
-                  {trip.origin} → {trip.destination}
+      ) : null}
+
+      {travelerTrips.length > 0 ? (
+        <>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>My Trips</Text>
+          </View>
+          {travelerTrips.map((trip) => (
+            <TouchableOpacity
+              key={trip.id}
+              style={styles.tripCard}
+              onPress={() => router.push({ pathname: '/traveler/trip-details', params: { id: trip.id } })}
+            >
+              <View style={styles.tripHeader}>
+                <View style={styles.routeContainer}>
+                  <MapPin size={20} color={Colors.primary} />
+                  <Text style={styles.route}>{trip.origin} → {trip.destination}</Text>
+                </View>
+                <StatusBadge status={trip.status} />
+              </View>
+              <View style={styles.tripDetails}>
+                <View style={styles.detailItem}>
+                  <Calendar size={16} color={Colors.textSecondary} />
+                  <Text style={styles.detailText}>
+                    {trip.departure_date ? `${trip.departure_date} at ${trip.departure_time}` : 'Date TBD'}
+                  </Text>
+                </View>
+                <View style={styles.detailItem}>
+                  <Package size={16} color={Colors.textSecondary} />
+                  <Text style={styles.detailText}>
+                    {trip.available_space ? `${trip.available_space} available` : 'Space available'}
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </>
+      ) : null}
+
+      {activeMatches.length > 0 ? (
+        <>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Ongoing Deliveries</Text>
+          </View>
+          {activeMatches.map((match) => (
+            <TouchableOpacity
+              key={match.id}
+              style={[styles.tripCard, { borderLeftWidth: 4, borderLeftColor: Colors.secondary }]}
+              onPress={() => router.push({ pathname: '/traveler/active-delivery', params: { matchId: match.id } })}
+            >
+              <View style={styles.tripHeader}>
+                <View style={styles.routeContainer}>
+                  <Package size={16} color={Colors.secondary} />
+                  <Text style={styles.route}>
+                    {match.delivery_requests?.origin} → {match.delivery_requests?.destination}
+                  </Text>
+                </View>
+                <StatusBadge status={match.status} />
+              </View>
+              <View style={styles.tripInfo}>
+                <Text style={styles.businessText}>
+                  Business: {match.delivery_requests?.users?.full_name}
+                </Text>
+                <Text style={styles.statusDetail}>
+                  {match.status === 'accepted' ? 'Ready for pickup' : 'In Transit'}
                 </Text>
               </View>
-              <StatusBadge status={trip.status} />
-            </View>
-            <View style={styles.tripInfo}>
-              <View style={styles.infoRow}>
-                <Calendar size={16} color={Colors.textSecondary} />
-                <Text style={styles.infoText}>{new Date(trip.departure_date).toLocaleDateString()}</Text>
-              </View>
-              <Text style={styles.requests}>
-                {trip.request_count || 0} delivery request{trip.request_count !== 1 ? 's' : ''}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))
-      )}
+            </TouchableOpacity>
+          ))}
+        </>
+      ) : null}
     </>
   );
 
@@ -192,7 +245,7 @@ export default function DashboardScreen() {
           <TouchableOpacity
             key={delivery.id}
             style={styles.tripCard}
-            onPress={() => router.push('/business/delivery-detail')}
+            onPress={() => router.push({ pathname: '/business/delivery-detail', params: { id: delivery.id } })}
           >
             <View style={styles.tripHeader}>
               <View style={styles.routeContainer}>
@@ -206,7 +259,12 @@ export default function DashboardScreen() {
             <View style={styles.tripInfo}>
               <View style={styles.infoRow}>
                 <Calendar size={16} color={Colors.textSecondary} />
-                <Text style={styles.infoText}>{new Date(delivery.delivery_date).toLocaleDateString()}</Text>
+                <Text style={styles.infoText}>
+                  {(() => {
+                    const d = new Date(delivery.delivery_date);
+                    return isNaN(d.getTime()) ? delivery.delivery_date : d.toLocaleDateString();
+                  })()}
+                </Text>
               </View>
               <Text style={styles.travelerText}>
                 Traveler: {delivery.traveler_name || 'Pending Match'}
@@ -217,6 +275,15 @@ export default function DashboardScreen() {
       )}
     </>
   );
+
+  if (loading && isFirstFetch || !initialCheckDone) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={{ marginTop: 12, color: Colors.textSecondary }}>Checking status...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -232,7 +299,7 @@ export default function DashboardScreen() {
         </TouchableOpacity>
       </View>
 
-      {!user?.is_verified && (
+      {!user?.is_verified ? (
         <View style={styles.verificationBanner}>
           <View style={{ flex: 1 }}>
             <Text style={styles.verificationText}>
@@ -240,11 +307,11 @@ export default function DashboardScreen() {
                 ? '⏳ Verification Pending Approval'
                 : '⚠️ Account Unverified'}
             </Text>
-            {user?.verification_status === 'pending' && (
+            {user?.verification_status === 'pending' ? (
               <Text style={styles.verificationSubtext}>
                 We're reviewing your documents
               </Text>
-            )}
+            ) : null}
           </View>
           {user?.verification_status !== 'pending' ? (
             <TouchableOpacity onPress={() => router.push('/verify/identity')}>
@@ -256,7 +323,7 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           )}
         </View>
-      )}
+      ) : null}
 
       <ScrollView
         style={styles.content}
@@ -434,11 +501,15 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    ...(Platform.OS !== 'web' ? {
+      elevation: 8,
+      shadowColor: Colors.shadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+    } : {
+      boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.3)',
+    } as any),
   },
   verificationBanner: {
     backgroundColor: '#FFF3E0',
@@ -469,5 +540,30 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '600',
     fontSize: 13,
+  },
+  businessText: {
+    fontSize: 14,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  statusDetail: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontStyle: 'italic',
+  },
+  tripDetails: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginTop: 4,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  detailText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
   },
 });

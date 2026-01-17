@@ -19,6 +19,8 @@ import { Colors } from '@/constants/Colors';
 export default function TrackingScreen() {
   const router = useRouter();
 
+  /* Feature Coming Soon */
+  /*
   const delivery = {
     travelerName: 'John Adebayo',
     travelerContact: '+234 801 234 5678',
@@ -27,6 +29,7 @@ export default function TrackingScreen() {
     deliveryAddress: 'Maitama, Abuja',
     otp: '456789',
   };
+  */
 
   const timeline = [
     { label: 'Request Accepted', completed: true },
@@ -53,101 +56,12 @@ export default function TrackingScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <View style={styles.statusCard}>
-          <StatusBadge status="active" />
-          <Text style={styles.statusText}>Delivery in Progress</Text>
-        </View>
-
-        <View style={styles.mapPlaceholder}>
-          <MapPin size={48} color={Colors.textSecondary} />
-          <Text style={styles.mapText}>Live Tracking Map</Text>
-        </View>
-
-        <View style={styles.timelineCard}>
-          <Text style={styles.cardTitle}>Delivery Status</Text>
-          {timeline.map((step, index) => (
-            <View key={index} style={styles.timelineItem}>
-              <View style={styles.timelineLeft}>
-                <View
-                  style={[
-                    styles.timelineDot,
-                    step.completed && styles.timelineDotCompleted,
-                  ]}
-                >
-                  {step.completed && (
-                    <CheckCircle size={16} color={Colors.textLight} />
-                  )}
-                </View>
-                {index < timeline.length - 1 && (
-                  <View
-                    style={[
-                      styles.timelineLine,
-                      step.completed && styles.timelineLineCompleted,
-                    ]}
-                  />
-                )}
-              </View>
-              <Text
-                style={[
-                  styles.timelineLabel,
-                  step.completed && styles.timelineLabelCompleted,
-                ]}
-              >
-                {step.label}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.travelerCard}>
-          <Text style={styles.cardTitle}>Traveler Information</Text>
-          <View style={styles.travelerInfo}>
-            <View style={styles.avatar}>
-              <User size={24} color={Colors.textLight} />
-            </View>
-            <View style={styles.travelerDetails}>
-              <Text style={styles.travelerName}>{delivery.travelerName}</Text>
-              <Text style={styles.travelerContact}>
-                {delivery.travelerContact}
-              </Text>
-            </View>
-          </View>
-          <TouchableOpacity style={styles.callButton}>
-            <Phone size={20} color={Colors.secondary} />
-            <Text style={styles.callButtonText}>Call Traveler</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.addressCard}>
-          <Text style={styles.cardTitle}>Addresses</Text>
-          <View style={styles.addressItem}>
-            <View style={styles.fromDot} />
-            <View style={styles.addressContent}>
-              <Text style={styles.addressLabel}>Pickup</Text>
-              <Text style={styles.addressValue}>
-                {delivery.pickupAddress}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.addressItem}>
-            <View style={styles.toDot} />
-            <View style={styles.addressContent}>
-              <Text style={styles.addressLabel}>Delivery</Text>
-              <Text style={styles.addressValue}>
-                {delivery.deliveryAddress}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.otpCard}>
-          <Text style={styles.otpTitle}>Delivery OTP</Text>
-          <Text style={styles.otpDescription}>
-            Share this code with the traveler upon delivery
+        <View style={{ padding: 20, alignItems: 'center' }}>
+          <MapPin size={64} color={Colors.textSecondary} />
+          <Text style={{ fontSize: 18, fontWeight: 'bold', marginTop: 16 }}>Live Tracking Coming Soon</Text>
+          <Text style={{ textAlign: 'center', marginTop: 8, color: Colors.textSecondary }}>
+            We're working hard to bring you real-time package tracking. In the meantime, please contact your traveler directly for updates.
           </Text>
-          <View style={styles.otpBox}>
-            <Text style={styles.otpCode}>{delivery.otp}</Text>
-          </View>
         </View>
       </ScrollView>
     </View>

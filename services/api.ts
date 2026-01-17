@@ -1,15 +1,17 @@
 import { Platform } from 'react-native';
 
-// Use localhost for web/simulator, specific IP for physical device if needed
-// For Android Emulator, use 10.0.2.2
+// Production API URL (your VPS)
+const PROD_API_URL = 'http://168.231.124.16/api';
+
+// Development API URL
 const DEV_API_URL = Platform.select({
     android: 'http://10.0.2.2:5000/api',
     ios: 'http://localhost:5000/api',
     default: 'http://localhost:5000/api',
 });
 
-// Allow overriding via global variable if needed
-const BASE_URL = DEV_API_URL;
+// Use production URL in release builds, dev URL in development
+export const BASE_URL = __DEV__ ? DEV_API_URL : PROD_API_URL;
 
 class ApiClient {
     private token: string | null = null;

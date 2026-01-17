@@ -76,7 +76,7 @@ export default function OTPScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/login')}
           style={styles.backButton}
         >
           <ArrowLeft size={24} color={Colors.text} />

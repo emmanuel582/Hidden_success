@@ -17,6 +17,9 @@ import {
   Globe,
   Moon,
   ChevronRight,
+  Landmark,
+  ShieldCheck,
+  ShieldAlert,
 } from 'lucide-react-native';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
@@ -32,16 +35,12 @@ export default function SettingsScreen() {
       title: 'Account',
       items: [
         {
-          icon: User,
-          label: 'Edit Profile',
-          onPress: () => { },
-          showArrow: true,
-        },
-        {
-          icon: Shield,
-          label: 'Privacy & Security',
-          onPress: () => { },
-          showArrow: true,
+          icon: user?.is_verified ? ShieldCheck : ShieldAlert,
+          label: 'Verification Status',
+          value: user?.is_verified ? 'Verified' : 'Action Required',
+          onPress: () => !user?.is_verified && router.push('/verify/identity'),
+          showArrow: !user?.is_verified,
+          valueColor: user?.is_verified ? Colors.success : Colors.error,
         },
       ],
     },
@@ -55,30 +54,18 @@ export default function SettingsScreen() {
           value: notifications,
           onToggle: setNotifications,
         },
-        {
-          icon: Moon,
-          label: 'Dark Mode',
-          toggle: true,
-          value: darkMode,
-          onToggle: setDarkMode,
-        },
-        {
-          icon: Globe,
-          label: 'Language',
-          onPress: () => { },
-          showArrow: true,
-          value: 'English',
-        },
       ],
     },
     {
       title: 'Payment',
       items: [
         {
-          icon: CreditCard,
-          label: 'Payment Methods',
-          onPress: () => { },
+          icon: Landmark,
+          label: 'Bank Details',
+          onPress: () => router.push('/bank-details'),
           showArrow: true,
+          value: user?.bank_name ? 'Details Added' : 'Add Details',
+          valueColor: user?.bank_name ? Colors.success : Colors.textSecondary,
         },
       ],
     },
@@ -100,7 +87,7 @@ export default function SettingsScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}
           style={styles.backButton}
         >
           <ArrowLeft size={24} color={Colors.text} />
@@ -136,7 +123,7 @@ export default function SettingsScreen() {
                     <View style={styles.settingInfo}>
                       <Text style={styles.settingLabel}>{item.label}</Text>
                       {item.value && !item.toggle && (
-                        <Text style={styles.settingValue}>{item.value}</Text>
+                        <Text style={[styles.settingValue, item.valueColor && { color: item.valueColor }]}>{item.value}</Text>
                       )}
                     </View>
                   </View>

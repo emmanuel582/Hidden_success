@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   ActivityIndicator
 } from 'react-native';
-import { useState, useEffect } from 'react';
-import { useRouter } from 'expo-router';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { api } from '@/services/api';
 import {
   ArrowLeft,
@@ -29,7 +29,17 @@ export default function AdminDashboardScreen() {
 
   useEffect(() => {
     fetchStats();
+    // Refresh stats every 30 seconds
+    const interval = setInterval(fetchStats, 30000);
+    return () => clearInterval(interval);
   }, []);
+
+  // When focusing, refresh
+  useFocusEffect(
+    useCallback(() => {
+      fetchStats();
+    }, [])
+  );
 
   const fetchStats = async () => {
     try {
@@ -125,7 +135,7 @@ export default function AdminDashboardScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/settings')}
           style={styles.backButton}
         >
           <ArrowLeft size={24} color={Colors.text} />

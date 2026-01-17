@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors } from '@/constants/Colors';
 
-type Status = 'pending' | 'active' | 'completed' | 'declined';
+type Status = 'pending' | 'active' | 'completed' | 'declined' | 'in_transit' | 'accepted' | 'matched' | 'delivered' | 'pickup_confirmed' | 'delivery_confirmed';
 
 interface StatusBadgeProps {
   status: Status;
@@ -13,8 +13,15 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
       case 'pending':
         return Colors.statusPending;
       case 'active':
+      case 'accepted':
+      case 'matched':
         return Colors.statusActive;
+      case 'in_transit':
+      case 'pickup_confirmed':
+        return Colors.primary;
       case 'completed':
+      case 'delivered':
+      case 'delivery_confirmed':
         return Colors.statusCompleted;
       case 'declined':
         return Colors.statusDeclined;
@@ -24,6 +31,9 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
   };
 
   const getStatusText = () => {
+    if (status === 'in_transit') return 'In Transit';
+    if (status === 'pickup_confirmed') return 'Picked Up';
+    if (status === 'delivery_confirmed') return 'Delivered';
     return status.charAt(0).toUpperCase() + status.slice(1);
   };
 

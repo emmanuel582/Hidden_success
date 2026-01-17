@@ -152,7 +152,7 @@ export default function VideoVerification() {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/verify/identity')} style={styles.backButton}>
             <ArrowLeft size={24} color={Colors.textLight} />
           </TouchableOpacity>
         </View>
@@ -226,7 +226,7 @@ export default function VideoVerification() {
       )}
 
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/verify/identity')} style={styles.backButton}>
           <ArrowLeft size={24} color={Colors.textLight} />
         </TouchableOpacity>
       </View>

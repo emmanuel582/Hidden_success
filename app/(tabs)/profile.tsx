@@ -13,6 +13,8 @@ import {
   Shield,
   ChevronRight,
   LogOut,
+  ShieldCheck,
+  ShieldAlert,
 } from 'lucide-react-native';
 import { useMode } from '@/contexts/ModeContext';
 import { Colors } from '@/constants/Colors';
@@ -56,21 +58,27 @@ export default function ProfileScreen() {
       icon: Settings,
       label: 'Settings',
       onPress: () => router.push('/settings'),
+      showArrow: true,
     },
     {
-      icon: Shield,
+      icon: user?.is_verified ? ShieldCheck : ShieldAlert,
       label: 'Verification Status',
-      onPress: () => router.push('/verify/identity'),
+      value: user?.is_verified ? 'Verified' : 'Action Required',
+      valueColor: user?.is_verified ? Colors.success : Colors.error,
+      onPress: () => !user?.is_verified && router.push('/verify/identity'),
+      showArrow: !user?.is_verified,
     },
     {
       icon: HelpCircle,
       label: 'Help & Support',
       onPress: () => router.push('/help'),
+      showArrow: true,
     },
     {
       icon: Star,
       label: 'Rate Your Experience',
       onPress: () => router.push('/rating'),
+      showArrow: true,
     },
   ];
 
@@ -101,7 +109,7 @@ export default function ProfileScreen() {
           <View style={[styles.verificationBadge, { backgroundColor: user?.is_verified ? Colors.primary + '20' : '#ffebee' }]}>
             <Shield size={16} color={user?.is_verified ? Colors.primary : Colors.error} />
             <Text style={[styles.verificationText, { color: user?.is_verified ? Colors.primary : Colors.error }]}>
-              {user?.is_verified ? 'Verified User' : 'Unverified'}
+              {user?.is_verified ? 'Verified' : 'Verification Pending'}
             </Text>
           </View>
         </View>
@@ -144,7 +152,16 @@ export default function ProfileScreen() {
                 </View>
                 <Text style={styles.menuItemText}>{item.label}</Text>
               </View>
-              <ChevronRight size={20} color={Colors.textSecondary} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {item.value && (
+                  <Text style={{ fontSize: 14, color: item.valueColor || Colors.textSecondary, fontWeight: '500' }}>
+                    {item.value}
+                  </Text>
+                )}
+                {item.showArrow && (
+                  <ChevronRight size={20} color={Colors.textSecondary} />
+                )}
+              </View>
             </TouchableOpacity>
           ))}
         </View>
